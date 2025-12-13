@@ -179,13 +179,13 @@ class BookingManagementFrame(BaseFrame):
         self.status_combo.pack(fill="x", padx=15, pady=(0, 15))
         self.status_combo.set("Pending")
         
-        # Buttons
-        btn_frame = ctk.CTkFrame(form_scroll, fg_color="transparent")
-        btn_frame.pack(fill="x", padx=15, pady=(10, 20))
+        # Buttons - Row 1
+        btn_frame1 = ctk.CTkFrame(form_scroll, fg_color="transparent")
+        btn_frame1.pack(fill="x", padx=15, pady=(10, 5))
         
         self.add_btn = ctk.CTkButton(
-            btn_frame,
-            text="➕ Add",
+            btn_frame1,
+            text="➕ Add Booking",
             command=self.add_booking,
             height=38,
             font=ctk.CTkFont(size=12, weight="bold"),
@@ -193,10 +193,10 @@ class BookingManagementFrame(BaseFrame):
             text_color="#1a1a2e",
             hover_color="#00a8cc"
         )
-        self.add_btn.pack(side="left", expand=True, fill="x", padx=2)
+        self.add_btn.pack(side="left", expand=True, fill="x", padx=(0, 5))
         
         self.update_btn = ctk.CTkButton(
-            btn_frame,
+            btn_frame1,
             text="✏️ Update",
             command=self.update_booking,
             height=38,
@@ -205,10 +205,14 @@ class BookingManagementFrame(BaseFrame):
             hover_color="#3d3d7a",
             state="disabled"
         )
-        self.update_btn.pack(side="left", expand=True, fill="x", padx=2)
+        self.update_btn.pack(side="left", expand=True, fill="x", padx=(5, 0))
+        
+        # Buttons - Row 2
+        btn_frame2 = ctk.CTkFrame(form_scroll, fg_color="transparent")
+        btn_frame2.pack(fill="x", padx=15, pady=(5, 20))
         
         self.delete_btn = ctk.CTkButton(
-            btn_frame,
+            btn_frame2,
             text="🗑️ Delete",
             command=self.delete_booking,
             height=38,
@@ -217,18 +221,18 @@ class BookingManagementFrame(BaseFrame):
             hover_color="#ff3344",
             state="disabled"
         )
-        self.delete_btn.pack(side="left", expand=True, fill="x", padx=2)
+        self.delete_btn.pack(side="left", expand=True, fill="x", padx=(0, 5))
         
         clear_btn = ctk.CTkButton(
-            btn_frame,
-            text="🔄 Clear",
+            btn_frame2,
+            text="🔄 Clear Form",
             command=self.clear_form,
             height=38,
             font=ctk.CTkFont(size=12, weight="bold"),
             fg_color="#2d2d5a",
             hover_color="#3d3d7a"
         )
-        clear_btn.pack(side="left", expand=True, fill="x", padx=2)
+        clear_btn.pack(side="left", expand=True, fill="x", padx=(5, 0))
         
         # Right panel - Table
         right_panel = ctk.CTkFrame(container, fg_color="#1e1e3f", corner_radius=15)

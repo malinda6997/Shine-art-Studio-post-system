@@ -1,4 +1,5 @@
 import customtkinter as ctk
+from tkinter import ttk
 from database import DatabaseManager
 from auth import AuthManager
 from ui.components import LoginWindow, Toast, MessageDialog
@@ -31,6 +32,26 @@ class MainApplication(ctk.CTk):
         # Set appearance
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")
+        
+        # Configure ttk styles for tables with larger font
+        style = ttk.Style()
+        style.theme_use("clam")
+        style.configure("Treeview",
+            background="#1e1e3f",
+            foreground="white",
+            fieldbackground="#1e1e3f",
+            font=("Segoe UI", 12),
+            rowheight=32
+        )
+        style.configure("Treeview.Heading",
+            background="#252545",
+            foreground="white",
+            font=("Segoe UI", 12, "bold")
+        )
+        style.map("Treeview",
+            background=[("selected", "#00d4ff")],
+            foreground=[("selected", "#1a1a2e")]
+        )
         
         # Hide main window initially
         self.withdraw()

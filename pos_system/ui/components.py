@@ -25,33 +25,34 @@ class ModernToast(ctk.CTkFrame):
         
         style = colors.get(toast_type, colors["info"])
         
-        self.configure(fg_color=style["bg"], border_width=1, border_color=style["accent"])
+        self.configure(fg_color=style["bg"], border_width=2, border_color=style["accent"])
         
         # Content
         content = ctk.CTkFrame(self, fg_color="transparent")
-        content.pack(padx=15, pady=12)
+        content.pack(padx=20, pady=15)
         
         # Icon
         icon_label = ctk.CTkLabel(
             content,
             text=style["icon"],
-            font=ctk.CTkFont(size=18, weight="bold"),
+            font=ctk.CTkFont(size=20, weight="bold"),
             text_color=style["accent"],
-            width=25
+            width=30
         )
-        icon_label.pack(side="left", padx=(0, 10))
+        icon_label.pack(side="left", padx=(0, 12))
         
         # Message
         msg_label = ctk.CTkLabel(
             content,
             text=message,
-            font=ctk.CTkFont(size=13),
+            font=ctk.CTkFont(size=14),
             text_color="white"
         )
         msg_label.pack(side="left")
         
-        # Position at top center
-        self.place(relx=0.5, y=-60, anchor="n")
+        # Position at top center and lift to front
+        self.place(relx=0.5, y=-80, anchor="n")
+        self.lift()
         
         # Animate in
         self.animate_in()
@@ -59,20 +60,24 @@ class ModernToast(ctk.CTkFrame):
     def animate_in(self):
         """Slide in animation"""
         self.update_idletasks()
-        self._animate_to_y(15, self.start_dismiss_timer)
+        self._animate_to_y(20, self.start_dismiss_timer)
     
     def _animate_to_y(self, target_y: int, callback=None):
         """Animate to target Y position"""
-        current_y = self.winfo_y()
-        if current_y < target_y:
-            new_y = min(current_y + 8, target_y)
-            self.place(relx=0.5, y=new_y, anchor="n")
-            if new_y < target_y:
-                self.after(10, lambda: self._animate_to_y(target_y, callback))
+        try:
+            current_y = self.winfo_y()
+            if current_y < target_y:
+                new_y = min(current_y + 10, target_y)
+                self.place(relx=0.5, y=new_y, anchor="n")
+                self.lift()
+                if new_y < target_y:
+                    self.after(8, lambda: self._animate_to_y(target_y, callback))
+                elif callback:
+                    callback()
             elif callback:
                 callback()
-        elif callback:
-            callback()
+        except:
+            pass
     
     def start_dismiss_timer(self):
         """Start timer to dismiss toast"""
@@ -84,12 +89,15 @@ class ModernToast(ctk.CTkFrame):
     
     def _animate_out_y(self):
         """Animate out"""
-        current_y = self.winfo_y()
-        if current_y > -60:
-            self.place(relx=0.5, y=current_y - 8, anchor="n")
-            self.after(10, self._animate_out_y)
-        else:
-            self.destroy()
+        try:
+            current_y = self.winfo_y()
+            if current_y > -80:
+                self.place(relx=0.5, y=current_y - 10, anchor="n")
+                self.after(8, self._animate_out_y)
+            else:
+                self.destroy()
+        except:
+            pass
 
 
 class ModernConfirmDialog(ctk.CTkToplevel):

@@ -36,33 +36,29 @@ class UsersManagementFrame(ctk.CTkFrame):
         main = ctk.CTkFrame(self, fg_color="transparent")
         main.pack(fill="both", expand=True, padx=30, pady=10)
         
-        # Left panel - Form (Scrollable)
+        # Left panel - Form
         left = ctk.CTkFrame(main, fg_color="#1e1e3f", corner_radius=15, width=400)
         left.pack(side="left", fill="y", padx=(0, 15), pady=0)
         left.pack_propagate(False)
         
-        # Scrollable container for form
-        left_scroll = ctk.CTkScrollableFrame(left, fg_color="transparent")
-        left_scroll.pack(fill="both", expand=True, padx=5, pady=5)
-        
         form_title = ctk.CTkLabel(
-            left_scroll,
+            left,
             text="User Details",
             font=ctk.CTkFont(size=18, weight="bold")
         )
-        form_title.pack(pady=(15, 15))
+        form_title.pack(pady=(20, 15))
         
-        # Form fields
-        form = ctk.CTkFrame(left_scroll, fg_color="transparent")
-        form.pack(fill="x", padx=20)
+        # Form fields container
+        form = ctk.CTkFrame(left, fg_color="transparent")
+        form.pack(fill="x", padx=25)
         
         # Full Name
-        ctk.CTkLabel(form, text="Full Name:", font=ctk.CTkFont(size=13, weight="bold")).pack(anchor="w", pady=(10, 5))
-        self.fullname_entry = ctk.CTkEntry(form, height=40, font=ctk.CTkFont(size=13))
-        self.fullname_entry.pack(fill="x", pady=(0, 10))
+        ctk.CTkLabel(form, text="Full Name:", font=ctk.CTkFont(size=13, weight="bold")).pack(anchor="w", pady=(5, 3))
+        self.fullname_entry = ctk.CTkEntry(form, height=38, font=ctk.CTkFont(size=13))
+        self.fullname_entry.pack(fill="x", pady=(0, 8))
         
         # Username
-        ctk.CTkLabel(form, text="Username:", font=ctk.CTkFont(size=13, weight="bold")).pack(anchor="w", pady=(10, 5))
+        ctk.CTkLabel(form, text="Username:", font=ctk.CTkFont(size=13, weight="bold")).pack(anchor="w", pady=(5, 3))
         self.username_entry = ctk.CTkEntry(form, height=40, font=ctk.CTkFont(size=13))
         self.username_entry.pack(fill="x", pady=(0, 10))
         
@@ -112,7 +108,7 @@ class UsersManagementFrame(ctk.CTkFrame):
             fg_color="#00d4ff",
             text_color="#1a1a2e",
             hover_color="#00a8cc",
-            command=self.add_user
+            command=lambda: self.add_user()
         )
         self.add_btn.pack(fill="x", pady=5)
         
@@ -199,29 +195,39 @@ class UsersManagementFrame(ctk.CTkFrame):
         confirm = self.confirm_password_entry.get()
         role = self.role_combo.get()
         
+        print(f"DEBUG: Adding user - fullname='{fullname}', username='{username}', password='{password}'")
+        
         if not fullname or not username or not password:
+            print("DEBUG: Validation failed - empty fields")
             Toast.error(self, "Please fill all required fields")
             return
         
         if password != confirm:
+            print("DEBUG: Validation failed - passwords don't match")
             Toast.error(self, "Passwords do not match")
             return
         
         if len(password) < 6:
+            print("DEBUG: Validation failed - password too short")
             Toast.error(self, "Password must be at least 6 characters")
             return
         
         if self.user_service.username_exists(username):
+            print("DEBUG: Validation failed - username exists")
             Toast.error(self, "Username already exists")
             return
         
+        print("DEBUG: Creating user...")
         user_id = self.user_service.create_user(username, password, role, fullname)
+        print(f"DEBUG: user_id = {user_id}")
         
         if user_id:
+            print("DEBUG: User created successfully, showing toast")
             Toast.success(self, "User created successfully")
             self.clear_form()
             self.load_users()
         else:
+            print("DEBUG: Failed to create user")
             Toast.error(self, "Failed to create user")
     
     def update_user(self):
