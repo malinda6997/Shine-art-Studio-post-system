@@ -1,6 +1,9 @@
 import customtkinter as ctk
 from tkinter import messagebox
 from typing import Callable, Optional
+from PIL import Image
+import os
+import random
 
 
 class LoginWindow(ctk.CTkToplevel):
@@ -13,127 +16,226 @@ class LoginWindow(ctk.CTkToplevel):
         self.on_success = on_success
         
         self.title("Shine Art Studio - Login")
-        self.geometry("450x550")
-        self.resizable(False, False)
+        
+        # Set window size
+        screen_width = self.winfo_screenwidth()
+        screen_height = self.winfo_screenheight()
+        window_width = int(screen_width * 0.75)
+        window_height = int(screen_height * 0.8)
         
         # Center window
-        self.update_idletasks()
-        x = (self.winfo_screenwidth() // 2) - (450 // 2)
-        y = (self.winfo_screenheight() // 2) - (550 // 2)
-        self.geometry(f"450x550+{x}+{y}")
+        x = (screen_width // 2) - (window_width // 2)
+        y = (screen_height // 2) - (window_height // 2)
+        self.geometry(f"{window_width}x{window_height}+{x}+{y}")
         
         # Make modal
         self.transient(parent)
         self.grab_set()
+        
+        # Prevent resize
+        self.resizable(False, False)
         
         self.create_widgets()
         
     def create_widgets(self):
         """Create login form widgets"""
         
-        # Main container
-        main_frame = ctk.CTkFrame(self, fg_color="transparent")
-        main_frame.pack(fill="both", expand=True, padx=40, pady=40)
+        # Set window background
+        self.configure(fg_color="#1a1a1a")
         
-        # Logo/Title
+        # Main container
+        main_container = ctk.CTkFrame(self, fg_color="#1a1a1a")
+        main_container.pack(fill="both", expand=True)
+        
+        # Left side - Image panel
+        left_panel = ctk.CTkFrame(main_container, fg_color="#1a1a1a", corner_radius=0)
+        left_panel.pack(side="left", fill="both", expand=True)
+        
+        # Random image selection
+        self.display_image = None
+        try:
+            assets_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets")
+            image_files = ["Image1.jpg", "image2.jpg", "image3.jpg"]
+            available_images = [os.path.join(assets_path, img) for img in image_files if os.path.exists(os.path.join(assets_path, img))]
+            
+            if available_images:
+                selected_image_path = random.choice(available_images)
+                login_img = Image.open(selected_image_path)
+                
+                # Calculate image size
+                window_height = int(self.winfo_screenheight() * 0.8)
+                target_height = window_height - 100
+                aspect_ratio = login_img.width / login_img.height
+                target_width = int(target_height * aspect_ratio)
+                
+                self.display_image = ctk.CTkImage(
+                    light_image=login_img,
+                    dark_image=login_img,
+                    size=(target_width, target_height)
+                )
+                
+                img_label = ctk.CTkLabel(left_panel, image=self.display_image, text="")
+                img_label.place(relx=0.5, rely=0.5, anchor="center")
+        except Exception as e:
+            print(f"Could not load login image: {e}")
+            fallback = ctk.CTkLabel(
+                left_panel,
+                text="Shine Art Studio",
+                font=ctk.CTkFont(size=48, weight="bold"),
+                text_color="white"
+            )
+            fallback.place(relx=0.5, rely=0.5, anchor="center")
+        
+        # Right side - Login form panel
+        right_panel = ctk.CTkFrame(main_container, fg_color="#1a1a1a", width=520, corner_radius=0)
+        right_panel.pack(side="right", fill="y")
+        right_panel.pack_propagate(False)
+        
+        # Form container
+        form_container = ctk.CTkFrame(right_panel, fg_color="transparent")
+        form_container.place(relx=0.5, rely=0.5, anchor="center")
+        
+        # Logo
+        self.logo_image = None
+        try:
+            logo_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "logo001.png")
+            if os.path.exists(logo_path):
+                logo_img = Image.open(logo_path)
+                self.logo_image = ctk.CTkImage(light_image=logo_img, dark_image=logo_img, size=(110, 110))
+                logo_label = ctk.CTkLabel(form_container, image=self.logo_image, text="")
+                logo_label.pack(pady=(0, 25))
+        except Exception as e:
+            print(f"Could not load logo: {e}")
+        
+        # Title with hierarchy
         title_label = ctk.CTkLabel(
-            main_frame,
+            form_container,
             text="Shine Art Studio",
-            font=ctk.CTkFont(size=32, weight="bold")
+            font=ctk.CTkFont(size=32, weight="bold"),
+            text_color="#ffffff"
         )
-        title_label.pack(pady=(0, 10))
+        title_label.pack(pady=(0, 8))
         
         subtitle_label = ctk.CTkLabel(
-            main_frame,
+            form_container,
             text="Photography POS System",
-            font=ctk.CTkFont(size=16)
+            font=ctk.CTkFont(size=15),
+            text_color="#888888"
         )
-        subtitle_label.pack(pady=(0, 40))
+        subtitle_label.pack(pady=(0, 50))
         
-        # Login form
-        form_frame = ctk.CTkFrame(main_frame)
-        form_frame.pack(fill="both", expand=True, pady=20)
-        
-        # Username
+        # Username field
         username_label = ctk.CTkLabel(
-            form_frame,
+            form_container,
             text="Username",
-            font=ctk.CTkFont(size=14, weight="bold")
+            font=ctk.CTkFont(size=14, weight="bold"),
+            text_color="#cccccc",
+            anchor="w"
         )
-        username_label.pack(pady=(30, 5), padx=30, anchor="w")
+        username_label.pack(pady=(0, 10), anchor="w", padx=5)
         
         self.username_entry = ctk.CTkEntry(
-            form_frame,
-            placeholder_text="Enter username",
-            height=40,
-            font=ctk.CTkFont(size=14)
+            form_container,
+            placeholder_text="Enter your username",
+            height=48,
+            width=420,
+            font=ctk.CTkFont(size=15),
+            border_width=2,
+            corner_radius=8
         )
-        self.username_entry.pack(pady=(0, 20), padx=30, fill="x")
+        self.username_entry.pack(pady=(0, 25))
         
-        # Password
+        # Password field
         password_label = ctk.CTkLabel(
-            form_frame,
+            form_container,
             text="Password",
-            font=ctk.CTkFont(size=14, weight="bold")
+            font=ctk.CTkFont(size=14, weight="bold"),
+            text_color="#cccccc",
+            anchor="w"
         )
-        password_label.pack(pady=(0, 5), padx=30, anchor="w")
+        password_label.pack(pady=(0, 10), anchor="w", padx=5)
         
         self.password_entry = ctk.CTkEntry(
-            form_frame,
-            placeholder_text="Enter password",
+            form_container,
+            placeholder_text="Enter your password",
             show="●",
-            height=40,
-            font=ctk.CTkFont(size=14)
+            height=48,
+            width=420,
+            font=ctk.CTkFont(size=15),
+            border_width=2,
+            corner_radius=8
         )
-        self.password_entry.pack(pady=(0, 30), padx=30, fill="x")
+        self.password_entry.pack(pady=(0, 35))
         
-        # Login button
+        # Login button with enhanced styling
         login_btn = ctk.CTkButton(
-            form_frame,
-            text="Login",
+            form_container,
+            text="LOGIN",
             command=self.handle_login,
-            height=45,
-            font=ctk.CTkFont(size=16, weight="bold"),
+            height=52,
+            width=420,
+            font=ctk.CTkFont(size=17, weight="bold"),
             fg_color="#1f538d",
-            hover_color="#14375e"
+            hover_color="#163d6b",
+            corner_radius=8,
+            border_width=0
         )
-        login_btn.pack(pady=(0, 20), padx=30, fill="x")
+        login_btn.pack(pady=(0, 20))
         
-        # Info text
-        info_label = ctk.CTkLabel(
-            form_frame,
-            text="Default credentials:\nAdmin: admin / admin123\nStaff: staff / staff123",
+        # Footer
+        footer_label = ctk.CTkLabel(
+            right_panel,
+            text="Developed by Malinda Prabath\n© 2025 Photography Studio Management System. All rights reserved.",
             font=ctk.CTkFont(size=11),
-            text_color="gray"
+            text_color="#555555",
+            justify="center"
         )
-        info_label.pack(pady=(10, 20))
+        footer_label.pack(side="bottom", pady=25)
         
-        # Bind Enter key
+        # Keyboard bindings
         self.username_entry.bind("<Return>", lambda e: self.password_entry.focus())
         self.password_entry.bind("<Return>", lambda e: self.handle_login())
         
-        # Focus username
-        self.username_entry.focus()
+        # Set focus
+        self.after(100, lambda: self.username_entry.focus())
     
     def handle_login(self):
         """Handle login button click"""
         username = self.username_entry.get().strip()
         password = self.password_entry.get()
         
-        if not username or not password:
-            messagebox.showerror("Error", "Please enter both username and password")
+        if not username:
+            messagebox.showerror(
+                "Login Error",
+                "Please enter your username."
+            )
+            self.username_entry.focus()
+            return
+        
+        if not password:
+            messagebox.showerror(
+                "Login Error",
+                "Please enter your password."
+            )
+            self.password_entry.focus()
             return
         
         user = self.auth_manager.authenticate(username, password)
         
         if user:
-            messagebox.showinfo("Success", f"Welcome, {user['full_name']}!")
+            messagebox.showinfo(
+                "Login Successful",
+                f"Welcome back, {user['full_name']}!\n\nRole: {user['role'].title()}"
+            )
             self.destroy()
             self.on_success(user)
         else:
-            messagebox.showerror("Error", "Invalid username or password")
+            messagebox.showerror(
+                "Authentication Failed",
+                "Invalid username or password.\nPlease try again."
+            )
             self.password_entry.delete(0, 'end')
-            self.username_entry.focus()
+            self.password_entry.focus()
 
 
 class MessageDialog:

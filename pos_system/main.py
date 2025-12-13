@@ -2,6 +2,8 @@ import customtkinter as ctk
 from database import DatabaseManager
 from auth import AuthManager
 from ui.components import LoginWindow
+from PIL import Image
+import os
 from ui.customer_frame import CustomerManagementFrame
 from ui.service_frame import ServiceManagementFrame
 from ui.frame_frame import FrameManagementFrame
@@ -20,15 +22,12 @@ class MainApplication(ctk.CTk):
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")
         
+        # Hide main window initially
+        self.withdraw()
+        
         # Window setup
         self.title("Shine Art Studio - POS System")
         self.geometry("1400x800")
-        
-        # Center window
-        self.update_idletasks()
-        x = (self.winfo_screenwidth() // 2) - 700
-        y = (self.winfo_screenheight() // 2) - 400
-        self.geometry(f"1400x800+{x}+{y}")
         
         # Initialize managers
         self.db_manager = DatabaseManager()
@@ -51,6 +50,14 @@ class MainApplication(ctk.CTk):
     def on_login_success(self, user):
         """Handle successful login"""
         self.current_user = user
+        self.deiconify()
+        
+        # Center window
+        self.update_idletasks()
+        x = (self.winfo_screenwidth() // 2) - 700
+        y = (self.winfo_screenheight() // 2) - 400
+        self.geometry(f"1400x800+{x}+{y}")
+        
         self.create_main_interface()
     
     def create_main_interface(self):
@@ -65,14 +72,29 @@ class MainApplication(ctk.CTk):
         top_bar.pack(fill="x", side="top")
         top_bar.pack_propagate(False)
         
-        # Logo/Title
+        # Logo/Title container
+        logo_title_frame = ctk.CTkFrame(top_bar, fg_color="transparent")
+        logo_title_frame.pack(side="left", padx=30, pady=15)
+        
+        # Logo
+        try:
+            logo_path = os.path.join(os.path.dirname(__file__), "assets", "logo001.png")
+            if os.path.exists(logo_path):
+                logo_image = Image.open(logo_path)
+                logo_photo = ctk.CTkImage(light_image=logo_image, dark_image=logo_image, size=(45, 45))
+                logo_label = ctk.CTkLabel(logo_title_frame, image=logo_photo, text="")
+                logo_label.pack(side="left", padx=(0, 15))
+        except Exception as e:
+            print(f"Could not load logo: {e}")
+        
+        # Title
         title_label = ctk.CTkLabel(
-            top_bar,
+            logo_title_frame,
             text="Shine Art Studio - POS System",
             font=ctk.CTkFont(size=22, weight="bold"),
             text_color="white"
         )
-        title_label.pack(side="left", padx=30, pady=15)
+        title_label.pack(side="left")
         
         # User info
         user_frame = ctk.CTkFrame(top_bar, fg_color="transparent")
