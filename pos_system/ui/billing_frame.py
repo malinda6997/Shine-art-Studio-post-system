@@ -51,6 +51,7 @@ class BillingFrame(BaseFrame):
         ctk.CTkLabel(search_container, text="Mobile Number:").pack(side="left", padx=5)
         self.mobile_search = ctk.CTkEntry(search_container, width=150, height=30)
         self.mobile_search.pack(side="left", padx=5)
+        self.mobile_search.bind("<KeyRelease>", self.on_mobile_search_change)
         
         ctk.CTkButton(
             search_container,
@@ -70,6 +71,10 @@ class BillingFrame(BaseFrame):
             text_color="#1a1a2e",
             hover_color="#00a8cc"
         ).pack(side="left", padx=5)
+        
+        # Customer suggestions dropdown (hidden by default)
+        self.suggestions_frame = ctk.CTkFrame(customer_frame, fg_color="#2d2d5a", corner_radius=8)
+        self.suggestion_buttons = []
         
         # Customer details display
         self.customer_info = ctk.CTkLabel(
@@ -270,6 +275,7 @@ class BillingFrame(BaseFrame):
     
     def search_customer(self):
         """Search customer by mobile"""
+        self.hide_suggestions()
         mobile = self.mobile_search.get().strip()
         
         if not mobile:
@@ -288,6 +294,64 @@ class BillingFrame(BaseFrame):
             MessageDialog.show_error("Not Found", "Customer not found")
             self.selected_customer = None
     
+    def on_mobile_search_change(self, event=None):
+        """Auto-search when typing 5+ digits"""
+        mobile = self.mobile_search.get().strip()
+        
+        # Only search if 5 or more digits entered
+        if len(mobile) >= 5:
+            customers = self.db_manager.search_customers(mobile)
+            
+            if customers:
+                self.show_suggestions(customers)
+            else:
+                self.hide_suggestions()
+        else:
+            self.hide_suggestions()
+    
+    def show_suggestions(self, customers):
+        """Show customer suggestions dropdown"""
+        # Clear existing buttons
+        for btn in self.suggestion_buttons:
+            btn.destroy()
+        self.suggestion_buttons = []
+        
+        # Show frame
+        self.suggestions_frame.pack(fill="x", padx=15, pady=(0, 5))
+        
+        # Add customer buttons (max 5)
+        for customer in customers[:5]:
+            btn = ctk.CTkButton(
+                self.suggestions_frame,
+                text=f"📱 {customer['mobile_number']}  -  {customer['full_name']}",
+                font=ctk.CTkFont(size=12),
+                fg_color="transparent",
+                hover_color="#3d3d6a",
+                anchor="w",
+                height=35,
+                command=lambda c=customer: self.select_suggestion(c)
+            )
+            btn.pack(fill="x", padx=5, pady=2)
+            self.suggestion_buttons.append(btn)
+    
+    def hide_suggestions(self):
+        """Hide suggestions dropdown"""
+        for btn in self.suggestion_buttons:
+            btn.destroy()
+        self.suggestion_buttons = []
+        self.suggestions_frame.pack_forget()
+    
+    def select_suggestion(self, customer):
+        """Select a customer from suggestions"""
+        self.hide_suggestions()
+        self.selected_customer = customer
+        self.mobile_search.delete(0, "end")
+        self.mobile_search.insert(0, customer['mobile_number'])
+        self.customer_info.configure(
+            text=f"Customer: {customer['full_name']}\nMobile: {customer['mobile_number']}",
+            text_color="white"
+        )
+
     def add_new_customer(self):
         """Add new customer dialog"""
         dialog = ctk.CTkToplevel(self)
