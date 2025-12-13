@@ -1,0 +1,9 @@
+*.pyc
+__pycache__/
+*.db
+invoices/*.pdf
+.vscode/
+.idea/
+venv/
+env/
+*.log
