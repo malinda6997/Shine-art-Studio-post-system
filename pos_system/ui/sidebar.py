@@ -1,6 +1,6 @@
 import customtkinter as ctk
 from typing import Callable, Dict
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageOps
 import os
 
 
@@ -115,35 +115,47 @@ class Sidebar(ctk.CTkFrame):
                 self.create_nav_button(self.nav_scroll, tab_id, icon, text)
         
         # User info at very bottom (fixed)
-        user_frame = ctk.CTkFrame(self, fg_color="#252545", corner_radius=10)
-        user_frame.pack(fill="x", padx=15, pady=(10, 20))
+        user_frame = ctk.CTkFrame(self, fg_color="#252545", corner_radius=12)
+        user_frame.pack(fill="x", padx=12, pady=(10, 15))
         
         user = self.auth_manager.get_current_user()
         if user:
             # Horizontal layout with avatar
             user_content = ctk.CTkFrame(user_frame, fg_color="transparent")
-            user_content.pack(fill="x", padx=12, pady=10)
+            user_content.pack(fill="x", padx=12, pady=12)
             
-            # Avatar container (circular)
-            avatar_frame = ctk.CTkFrame(user_content, fg_color="#1a1a2e", width=40, height=40, corner_radius=20)
+            # Avatar container (circular) - improved styling
+            avatar_size = 44
+            avatar_frame = ctk.CTkFrame(
+                user_content, 
+                fg_color="#1a1a2e", 
+                width=avatar_size, 
+                height=avatar_size, 
+                corner_radius=avatar_size // 2,
+                border_width=2,
+                border_color="#00d4ff"
+            )
             avatar_frame.pack(side="left")
             avatar_frame.pack_propagate(False)
             
             # Load profile image or show default
-            profile_img = self.load_user_avatar(user.get('id'), (36, 36))
+            profile_img = self.load_user_avatar(user.get('id'), (avatar_size - 4, avatar_size - 4))
             if profile_img:
                 self.avatar_label = ctk.CTkLabel(avatar_frame, image=profile_img, text="")
             else:
+                # Default avatar with initials or icon
+                initials = self.get_user_initials(user['full_name'])
                 self.avatar_label = ctk.CTkLabel(
                     avatar_frame,
-                    text="👤",
-                    font=ctk.CTkFont(size=18)
+                    text=initials if initials else "👤",
+                    font=ctk.CTkFont(size=14, weight="bold"),
+                    text_color="#00d4ff"
                 )
             self.avatar_label.pack(expand=True)
             
             # User info (name + role)
             info_frame = ctk.CTkFrame(user_content, fg_color="transparent")
-            info_frame.pack(side="left", padx=(10, 0), fill="x", expand=True)
+            info_frame.pack(side="left", padx=(12, 0), fill="x", expand=True)
             
             user_name = ctk.CTkLabel(
                 info_frame,
@@ -154,18 +166,24 @@ class Sidebar(ctk.CTkFrame):
             )
             user_name.pack(anchor="w")
             
+            # Role badge with styling
+            role_color = "#00d4ff" if user['role'] == 'Admin' else "#00ff88"
             user_role = ctk.CTkLabel(
                 info_frame,
-                text=user['role'],
-                font=ctk.CTkFont(size=10),
-                text_color="#00d4ff",
+                text=f"● {user['role']}",
+                font=ctk.CTkFont(size=10, weight="bold"),
+                text_color=role_color,
                 anchor="w"
             )
             user_role.pack(anchor="w")
             
             # Last login info
             last_login = user.get('last_login')
-            login_text = f"Last: {last_login}" if last_login else "First login"
+            if last_login:
+                # Format last login to be more compact
+                login_text = f"Last: {last_login[:16]}" if len(last_login) > 16 else f"Last: {last_login}"
+            else:
+                login_text = "First login"
             last_login_label = ctk.CTkLabel(
                 info_frame,
                 text=login_text,
@@ -178,30 +196,68 @@ class Sidebar(ctk.CTkFrame):
         # Set dashboard as active
         self.set_active("dashboard")
     
-    def load_user_avatar(self, user_id: int, size: tuple = (36, 36)):
-        """Load user profile image with circular mask"""
+    def get_user_initials(self, full_name: str) -> str:
+        """Get user initials from full name"""
+        if not full_name:
+            return ""
+        parts = full_name.strip().split()
+        if len(parts) >= 2:
+            return (parts[0][0] + parts[-1][0]).upper()
+        elif len(parts) == 1:
+            return parts[0][0].upper()
+        return ""
+    
+    def load_user_avatar(self, user_id: int, size: tuple = (40, 40)):
+        """Load user profile image with perfect circular mask and object-fit cover"""
         try:
             from services.user_service import UserService
             user_service = UserService()
             profile_path = user_service.get_profile_picture(user_id)
             if profile_path and os.path.exists(profile_path):
                 img = Image.open(profile_path)
-                # Make square crop from center
-                min_dim = min(img.size)
-                left = (img.width - min_dim) // 2
-                top = (img.height - min_dim) // 2
-                img = img.crop((left, top, left + min_dim, top + min_dim))
+                
+                # Convert to RGB if necessary (handle RGBA, P mode, etc.)
+                if img.mode in ('RGBA', 'P', 'LA'):
+                    # Create a white background for transparency
+                    background = Image.new('RGB', img.size, (26, 26, 46))  # Match sidebar bg
+                    if img.mode == 'P':
+                        img = img.convert('RGBA')
+                    background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
+                    img = background
+                elif img.mode != 'RGB':
+                    img = img.convert('RGB')
+                
+                # Object-fit: cover - crop from center to make square
+                width, height = img.size
+                min_dim = min(width, height)
+                
+                # Calculate crop box for center crop
+                left = (width - min_dim) // 2
+                top = (height - min_dim) // 2
+                right = left + min_dim
+                bottom = top + min_dim
+                
+                # Crop to square
+                img = img.crop((left, top, right, bottom))
+                
+                # High quality resize using LANCZOS
                 img = img.resize(size, Image.Resampling.LANCZOS)
                 
-                # Create circular mask
-                mask = Image.new('L', size, 0)
+                # Create perfect circular mask with anti-aliasing
+                # Use larger size for mask then downscale for smooth edges
+                mask_size = (size[0] * 4, size[1] * 4)
+                mask = Image.new('L', mask_size, 0)
                 draw = ImageDraw.Draw(mask)
-                draw.ellipse((0, 0, size[0], size[1]), fill=255)
+                draw.ellipse((0, 0, mask_size[0] - 1, mask_size[1] - 1), fill=255)
+                mask = mask.resize(size, Image.Resampling.LANCZOS)
                 
-                # Apply mask
+                # Create output with transparency
                 output = Image.new('RGBA', size, (0, 0, 0, 0))
-                img = img.convert('RGBA')
-                output.paste(img, (0, 0), mask)
+                img_rgba = img.convert('RGBA')
+                
+                # Apply the circular mask
+                output.paste(img_rgba, (0, 0))
+                output.putalpha(mask)
                 
                 self.user_avatar = ctk.CTkImage(light_image=output, dark_image=output, size=size)
                 return self.user_avatar

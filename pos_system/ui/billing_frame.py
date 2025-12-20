@@ -13,7 +13,10 @@ class BillingFrame(BaseFrame):
         self.selected_customer = None
         self.cart_items = []
         self.categories_map = {}  # name -> id mapping
+        self.categories_data = {}  # name -> full category data including service_cost
         self.services_map = {}  # name -> service data
+        self.category_service_cost = 0  # Track category service cost
+        self.selected_category_name = None  # Track selected category
         self.create_widgets()
         self.load_categories()
     
@@ -281,6 +284,18 @@ class BillingFrame(BaseFrame):
         self.discount_entry.pack(side="right")
         self.discount_entry.bind("<KeyRelease>", lambda e: self.calculate_totals())
         
+        # Category Service Cost Display (read-only)
+        service_cost_frame = ctk.CTkFrame(right_panel, fg_color="transparent")
+        service_cost_frame.pack(fill="x", padx=20, pady=5)
+        ctk.CTkLabel(service_cost_frame, text="Category Service:", font=ctk.CTkFont(size=13)).pack(side="left")
+        self.service_cost_label = ctk.CTkLabel(
+            service_cost_frame,
+            text="LKR 0.00",
+            font=ctk.CTkFont(size=13),
+            text_color="#ffd93d"
+        )
+        self.service_cost_label.pack(side="right")
+        
         # Total
         total_frame = ctk.CTkFrame(right_panel)
         total_frame.pack(fill="x", padx=20, pady=15)
@@ -297,6 +312,15 @@ class BillingFrame(BaseFrame):
         )
         self.total_label.pack(side="right", padx=10, pady=10)
         
+        # Advance Payment (optional)
+        advance_frame = ctk.CTkFrame(right_panel, fg_color="transparent")
+        advance_frame.pack(fill="x", padx=20, pady=10)
+        ctk.CTkLabel(advance_frame, text="Advance Payment:", font=ctk.CTkFont(size=13)).pack(side="left")
+        self.advance_entry = ctk.CTkEntry(advance_frame, width=120, height=35)
+        self.advance_entry.insert(0, "0")
+        self.advance_entry.pack(side="right")
+        self.advance_entry.bind("<KeyRelease>", lambda e: self.calculate_balance())
+        
         # Paid amount
         paid_frame = ctk.CTkFrame(right_panel, fg_color="transparent")
         paid_frame.pack(fill="x", padx=20, pady=10)
@@ -305,12 +329,12 @@ class BillingFrame(BaseFrame):
         self.paid_entry.pack(side="right")
         self.paid_entry.bind("<KeyRelease>", lambda e: self.calculate_balance())
         
-        # Balance
+        # Remaining Balance
         balance_frame = ctk.CTkFrame(right_panel, fg_color="transparent")
         balance_frame.pack(fill="x", padx=20, pady=5)
         ctk.CTkLabel(
             balance_frame,
-            text="Balance:",
+            text="Remaining Balance:",
             font=ctk.CTkFont(size=13, weight="bold")
         ).pack(side="left")
         self.balance_label = ctk.CTkLabel(
@@ -348,6 +372,7 @@ class BillingFrame(BaseFrame):
         """Load categories for dropdown"""
         categories = self.db_manager.get_all_categories()
         self.categories_map = {cat['category_name']: cat['id'] for cat in categories}
+        self.categories_data = {cat['category_name']: cat for cat in categories}
         category_names = ["Select Category"] + list(self.categories_map.keys())
         self.category_combo.configure(values=category_names)
         # Load initial items
@@ -361,19 +386,37 @@ class BillingFrame(BaseFrame):
             self.item_combo.configure(values=["Select Category First"])
             self.item_combo.set("Select Category First")
             self.services_map = {}
+            self.category_service_cost = 0
+            self.selected_category_name = None
         else:
-            # Load frames directly
+            # Load frames directly - no category service cost for frames
+            self.category_service_cost = 0
+            self.selected_category_name = None
             self.load_frames()
+        self.calculate_totals()
     
     def on_category_change(self, selected_category):
-        """Load services when category changes"""
+        """Load services when category changes and check service cost"""
         if selected_category == "Select Category":
             self.item_combo.configure(values=["Select Category First"])
             self.item_combo.set("Select Category First")
             self.services_map = {}
+            self.category_service_cost = 0
+            self.selected_category_name = None
+            self.calculate_totals()
             return
         
         category_id = self.categories_map.get(selected_category)
+        category_data = self.categories_data.get(selected_category)
+        
+        # Get category service cost if available
+        if category_data and category_data.get('service_cost') is not None:
+            self.category_service_cost = float(category_data['service_cost'])
+            self.selected_category_name = selected_category
+        else:
+            self.category_service_cost = 0
+            self.selected_category_name = None
+        
         if category_id:
             services = self.db_manager.get_services_by_category(category_id)
             self.services_map = {s['service_name']: s for s in services}
@@ -388,6 +431,8 @@ class BillingFrame(BaseFrame):
             self.item_combo.configure(values=["No Services"])
             self.item_combo.set("No Services")
             self.services_map = {}
+        
+        self.calculate_totals()
     
     def load_frames(self):
         """Load photo frames"""
@@ -714,30 +759,47 @@ class BillingFrame(BaseFrame):
             ))
     
     def calculate_totals(self):
-        """Calculate totals"""
+        """Calculate totals including category service cost"""
         subtotal = sum(item['total'] for item in self.cart_items)
         
         discount_str = self.discount_entry.get().strip()
         discount = float(discount_str) if discount_str and self.validate_number(discount_str, True) else 0
         
-        total = subtotal - discount
+        # Add category service cost if applicable
+        service_cost = self.category_service_cost
+        
+        total = subtotal + service_cost - discount
         
         self.subtotal_label.configure(text=f"LKR {subtotal:.2f}")
+        self.service_cost_label.configure(text=f"LKR {service_cost:.2f}")
         self.total_label.configure(text=f"LKR {total:.2f}")
         
         self.calculate_balance()
     
     def calculate_balance(self):
-        """Calculate balance"""
-        total_str = self.total_label.cget("text").replace("LKR ", "")
+        """Calculate remaining balance based on advance and paid amount"""
+        total_str = self.total_label.cget("text").replace("LKR ", "").replace(",", "")
         total = float(total_str) if total_str else 0
+        
+        advance_str = self.advance_entry.get().strip()
+        advance = float(advance_str) if advance_str and self.validate_number(advance_str, True) else 0
         
         paid_str = self.paid_entry.get().strip()
         paid = float(paid_str) if paid_str and self.validate_number(paid_str, True) else 0
         
-        balance = paid - total
+        # Total paid = advance + paid amount
+        total_paid = advance + paid
         
-        self.balance_label.configure(text=f"LKR {balance:.2f}")
+        # Remaining balance (never negative)
+        remaining = max(0, total - total_paid)
+        
+        self.balance_label.configure(text=f"LKR {remaining:.2f}")
+        
+        # Update color based on balance
+        if remaining > 0:
+            self.balance_label.configure(text_color="#ff6b6b")  # Red for pending
+        else:
+            self.balance_label.configure(text_color="#00ff88")  # Green for fully paid
     
     def generate_invoice(self):
         """Generate and save invoice"""
@@ -750,30 +812,44 @@ class BillingFrame(BaseFrame):
             return
         
         paid_str = self.paid_entry.get().strip()
-        if not paid_str or not self.validate_number(paid_str, True):
-            MessageDialog.show_error("Error", "Please enter paid amount")
+        advance_str = self.advance_entry.get().strip()
+        
+        # Validate paid amount (can be 0 if advance covers total)
+        if paid_str and not self.validate_number(paid_str, True):
+            MessageDialog.show_error("Error", "Please enter valid paid amount")
+            return
+        
+        if advance_str and not self.validate_number(advance_str, True):
+            MessageDialog.show_error("Error", "Please enter valid advance amount")
             return
         
         # Calculate totals
         subtotal = sum(item['total'] for item in self.cart_items)
         discount = float(self.discount_entry.get() or 0)
-        total = subtotal - discount
-        paid = float(paid_str)
-        balance = paid - total
+        service_cost = self.category_service_cost
+        total = subtotal + service_cost - discount
+        advance = float(advance_str) if advance_str else 0
+        paid = float(paid_str) if paid_str else 0
+        total_paid = advance + paid
+        
+        # Remaining balance (never negative)
+        balance = max(0, total - total_paid)
         
         # Generate invoice number
         invoice_number = self.db_manager.generate_invoice_number()
         
-        # Create invoice
+        # Create invoice with category service cost and advance payment
         invoice_id = self.db_manager.create_invoice(
             invoice_number,
             self.selected_customer['id'],
             subtotal,
             discount,
             total,
-            paid,
+            total_paid,
             balance,
-            self.auth_manager.get_user_id()
+            self.auth_manager.get_user_id(),
+            service_cost,
+            advance
         )
         
         if not invoice_id:
@@ -782,6 +858,13 @@ class BillingFrame(BaseFrame):
         
         # Add invoice items and update stock
         for item in self.cart_items:
+            buying_price = 0
+            if item['type'] == 'Frame':
+                # Get buying price for frame profit tracking
+                frame_data = self.db_manager.get_photo_frame_by_id(item['id'])
+                if frame_data:
+                    buying_price = frame_data.get('buying_price', 0) or 0
+            
             self.db_manager.add_invoice_item(
                 invoice_id,
                 item['type'],
@@ -789,12 +872,26 @@ class BillingFrame(BaseFrame):
                 item['name'],
                 item['quantity'],
                 item['unit_price'],
-                item['total']
+                item['total'],
+                buying_price * item['quantity']  # Total buying cost
             )
             
             # Update frame stock
             if item['type'] == 'Frame':
                 self.db_manager.update_frame_quantity(item['id'], -item['quantity'])
+        
+        # Add category service cost as a separate line item if applicable
+        if service_cost > 0 and self.selected_category_name:
+            self.db_manager.add_invoice_item(
+                invoice_id,
+                'CategoryService',
+                0,
+                f"Category Service - {self.selected_category_name}",
+                1,
+                service_cost,
+                service_cost,
+                0
+            )
         
         # Generate PDF
         invoice_data = self.db_manager.get_invoice_by_id(invoice_id)
@@ -822,10 +919,14 @@ class BillingFrame(BaseFrame):
         """Clear all fields"""
         self.selected_customer = None
         self.cart_items = []
+        self.category_service_cost = 0
+        self.selected_category_name = None
         self.mobile_search.delete(0, 'end')
         self.clear_selected_customer()
         self.discount_entry.delete(0, 'end')
         self.discount_entry.insert(0, "0")
+        self.advance_entry.delete(0, 'end')
+        self.advance_entry.insert(0, "0")
         self.paid_entry.delete(0, 'end')
         self.quantity_entry.delete(0, 'end')
         self.quantity_entry.insert(0, "1")

@@ -106,19 +106,19 @@ class DatabaseManager:
         return self.execute_query(query, (search_pattern, search_pattern))
     
     # Category operations
-    def add_category(self, category_name: str) -> Optional[int]:
-        """Add a new category"""
-        query = 'INSERT INTO categories (category_name) VALUES (?)'
-        return self.execute_insert(query, (category_name,))
+    def add_category(self, category_name: str, service_cost: float = None) -> Optional[int]:
+        """Add a new category with optional service cost"""
+        query = 'INSERT INTO categories (category_name, service_cost) VALUES (?, ?)'
+        return self.execute_insert(query, (category_name, service_cost))
     
-    def update_category(self, category_id: int, category_name: str) -> bool:
-        """Update a category"""
+    def update_category(self, category_id: int, category_name: str, service_cost: float = None) -> bool:
+        """Update a category with optional service cost"""
         query = '''
             UPDATE categories 
-            SET category_name = ?, updated_at = CURRENT_TIMESTAMP
+            SET category_name = ?, service_cost = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
         '''
-        return self.execute_update(query, (category_name, category_id))
+        return self.execute_update(query, (category_name, service_cost, category_id))
     
     def delete_category(self, category_id: int) -> bool:
         """Delete a category"""
@@ -195,24 +195,27 @@ class DatabaseManager:
         return results[0] if results else None
     
     # Photo frame operations
-    def add_photo_frame(self, frame_name: str, size: str, price: float, quantity: int) -> Optional[int]:
-        """Add a new photo frame"""
+    def add_photo_frame(self, frame_name: str, size: str, price: float, quantity: int,
+                        buying_price: float = 0, selling_price: float = 0) -> Optional[int]:
+        """Add a new photo frame with buying and selling prices"""
         query = '''
-            INSERT INTO photo_frames (frame_name, size, price, quantity)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO photo_frames (frame_name, size, price, quantity, buying_price, selling_price)
+            VALUES (?, ?, ?, ?, ?, ?)
         '''
-        return self.execute_insert(query, (frame_name, size, price, quantity))
+        return self.execute_insert(query, (frame_name, size, price, quantity, buying_price, selling_price))
     
     def update_photo_frame(self, frame_id: int, frame_name: str, size: str, 
-                          price: float, quantity: int) -> bool:
-        """Update a photo frame"""
+                          price: float, quantity: int, buying_price: float = 0,
+                          selling_price: float = 0) -> bool:
+        """Update a photo frame with buying and selling prices"""
         query = '''
             UPDATE photo_frames 
-            SET frame_name = ?, size = ?, price = ?, quantity = ?, 
-                updated_at = CURRENT_TIMESTAMP
+            SET frame_name = ?, size = ?, price = ?, quantity = ?,
+                buying_price = ?, selling_price = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
         '''
-        return self.execute_update(query, (frame_name, size, price, quantity, frame_id))
+        return self.execute_update(query, (frame_name, size, price, quantity, 
+                                          buying_price, selling_price, frame_id))
     
     def delete_photo_frame(self, frame_id: int) -> bool:
         """Delete a photo frame"""
@@ -242,28 +245,30 @@ class DatabaseManager:
     # Invoice operations
     def create_invoice(self, invoice_number: str, customer_id: int, subtotal: float,
                       discount: float, total_amount: float, paid_amount: float,
-                      balance_amount: float, created_by: int) -> Optional[int]:
-        """Create a new invoice"""
+                      balance_amount: float, created_by: int, 
+                      category_service_cost: float = 0, advance_payment: float = 0) -> Optional[int]:
+        """Create a new invoice with category service cost and advance payment"""
         query = '''
             INSERT INTO invoices (invoice_number, customer_id, subtotal, discount,
-                                total_amount, paid_amount, balance_amount, created_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                                category_service_cost, advance_payment, total_amount, 
+                                paid_amount, balance_amount, created_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         '''
         return self.execute_insert(query, (invoice_number, customer_id, subtotal, 
-                                          discount, total_amount, paid_amount, 
-                                          balance_amount, created_by))
+                                          discount, category_service_cost, advance_payment,
+                                          total_amount, paid_amount, balance_amount, created_by))
     
     def add_invoice_item(self, invoice_id: int, item_type: str, item_id: int,
                         item_name: str, quantity: int, unit_price: float,
-                        total_price: float) -> Optional[int]:
-        """Add an item to an invoice"""
+                        total_price: float, buying_price: float = 0) -> Optional[int]:
+        """Add an item to an invoice with optional buying price for frames"""
         query = '''
             INSERT INTO invoice_items (invoice_id, item_type, item_id, item_name,
-                                      quantity, unit_price, total_price)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                                      quantity, unit_price, total_price, buying_price)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         '''
         return self.execute_insert(query, (invoice_id, item_type, item_id, item_name,
-                                          quantity, unit_price, total_price))
+                                          quantity, unit_price, total_price, buying_price))
     
     def get_invoice_by_id(self, invoice_id: int) -> Optional[Dict[str, Any]]:
         """Get invoice with customer details"""

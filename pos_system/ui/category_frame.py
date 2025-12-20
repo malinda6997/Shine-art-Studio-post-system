@@ -56,7 +56,31 @@ class CategoryManagementFrame(BaseFrame):
             font=ctk.CTkFont(size=13),
             placeholder_text="Enter category name"
         )
-        self.name_entry.pack(padx=20, pady=(0, 20))
+        self.name_entry.pack(padx=20, pady=(0, 15))
+        
+        # Service Cost (Optional)
+        ctk.CTkLabel(
+            form_frame,
+            text="Service Cost (Optional):",
+            font=ctk.CTkFont(size=13, weight="bold")
+        ).pack(anchor="w", padx=20, pady=(5, 5))
+        
+        self.service_cost_entry = ctk.CTkEntry(
+            form_frame, 
+            width=300, 
+            height=40,
+            font=ctk.CTkFont(size=13),
+            placeholder_text="Enter service cost (LKR) - Leave empty if none"
+        )
+        self.service_cost_entry.pack(padx=20, pady=(0, 5))
+        
+        # Service cost info label
+        ctk.CTkLabel(
+            form_frame,
+            text="💡 Service cost will be auto-added to bills",
+            font=ctk.CTkFont(size=10),
+            text_color="#888888"
+        ).pack(anchor="w", padx=20, pady=(0, 20))
         
         # Buttons
         btn_frame = ctk.CTkFrame(form_frame, fg_color="transparent")
@@ -155,17 +179,19 @@ class CategoryManagementFrame(BaseFrame):
         table_frame.pack(fill="both", expand=True, padx=15, pady=(0, 15))
         
         # Create Treeview
-        columns = ("ID", "Category Name", "Created At")
+        columns = ("ID", "Category Name", "Service Cost", "Created At")
         self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=15)
         
         # Configure columns
         self.tree.heading("ID", text="ID")
         self.tree.heading("Category Name", text="Category Name")
+        self.tree.heading("Service Cost", text="Service Cost (LKR)")
         self.tree.heading("Created At", text="Created At")
         
         self.tree.column("ID", width=60, anchor="center")
-        self.tree.column("Category Name", width=300)
-        self.tree.column("Created At", width=200)
+        self.tree.column("Category Name", width=200)
+        self.tree.column("Service Cost", width=120, anchor="e")
+        self.tree.column("Created At", width=180)
         
         # Scrollbar
         scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
@@ -184,10 +210,23 @@ class CategoryManagementFrame(BaseFrame):
             return
         
         name = self.name_entry.get().strip()
+        service_cost_str = self.service_cost_entry.get().strip()
         
         if not name:
             MessageDialog.show_error("Error", "Please enter category name")
             return
+        
+        # Validate service cost if provided
+        service_cost = None
+        if service_cost_str:
+            try:
+                service_cost = float(service_cost_str)
+                if service_cost < 0:
+                    MessageDialog.show_error("Error", "Service cost cannot be negative")
+                    return
+            except ValueError:
+                MessageDialog.show_error("Error", "Please enter a valid service cost")
+                return
         
         # Check if category already exists
         existing = self.db_manager.get_category_by_name(name)
@@ -195,7 +234,7 @@ class CategoryManagementFrame(BaseFrame):
             MessageDialog.show_error("Error", "Category with this name already exists")
             return
         
-        category_id = self.db_manager.add_category(name)
+        category_id = self.db_manager.add_category(name, service_cost)
         
         if category_id:
             MessageDialog.show_success("Success", "Category added successfully")
@@ -215,10 +254,23 @@ class CategoryManagementFrame(BaseFrame):
             return
         
         name = self.name_entry.get().strip()
+        service_cost_str = self.service_cost_entry.get().strip()
         
         if not name:
             MessageDialog.show_error("Error", "Please enter category name")
             return
+        
+        # Validate service cost if provided
+        service_cost = None
+        if service_cost_str:
+            try:
+                service_cost = float(service_cost_str)
+                if service_cost < 0:
+                    MessageDialog.show_error("Error", "Service cost cannot be negative")
+                    return
+            except ValueError:
+                MessageDialog.show_error("Error", "Please enter a valid service cost")
+                return
         
         # Check if name exists for other category
         existing = self.db_manager.get_category_by_name(name)
@@ -226,7 +278,7 @@ class CategoryManagementFrame(BaseFrame):
             MessageDialog.show_error("Error", "Category with this name already exists")
             return
         
-        success = self.db_manager.update_category(self.selected_category_id, name)
+        success = self.db_manager.update_category(self.selected_category_id, name, service_cost)
         
         if success:
             MessageDialog.show_success("Success", "Category updated successfully")
@@ -260,6 +312,7 @@ class CategoryManagementFrame(BaseFrame):
     def clear_form(self):
         """Clear input fields"""
         self.name_entry.delete(0, 'end')
+        self.service_cost_entry.delete(0, 'end')
         self.selected_category_id = None
         
         if self.is_admin():
@@ -278,9 +331,12 @@ class CategoryManagementFrame(BaseFrame):
         categories = self.db_manager.get_all_categories()
         
         for category in categories:
+            service_cost = category.get('service_cost')
+            cost_display = f"{service_cost:.2f}" if service_cost is not None else "-"
             self.tree.insert("", "end", values=(
                 category['id'],
                 category['category_name'],
+                cost_display,
                 category['created_at']
             ))
     
@@ -296,9 +352,12 @@ class CategoryManagementFrame(BaseFrame):
         
         for category in categories:
             if not search_term or search_term in category['category_name'].lower():
+                service_cost = category.get('service_cost')
+                cost_display = f"{service_cost:.2f}" if service_cost is not None else "-"
                 self.tree.insert("", "end", values=(
                     category['id'],
                     category['category_name'],
+                    cost_display,
                     category['created_at']
                 ))
     
@@ -314,6 +373,11 @@ class CategoryManagementFrame(BaseFrame):
         self.selected_category_id = values[0]
         self.name_entry.delete(0, 'end')
         self.name_entry.insert(0, values[1])
+        
+        # Handle service cost
+        self.service_cost_entry.delete(0, 'end')
+        if values[2] != "-":
+            self.service_cost_entry.insert(0, values[2])
         
         if self.is_admin():
             self.add_btn.configure(state="disabled")

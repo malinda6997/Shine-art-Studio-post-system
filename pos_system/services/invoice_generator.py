@@ -17,7 +17,7 @@ class InvoiceGenerator:
         os.makedirs(invoice_folder, exist_ok=True)
     
     def generate_invoice(self, invoice_data, items, customer_data):
-        """Generate PDF invoice"""
+        """Generate PDF invoice with advance payment and category service cost"""
         
         # Create filename
         filename = f"{invoice_data['invoice_number']}.pdf"
@@ -78,10 +78,13 @@ class InvoiceGenerator:
         table_data = [['#', 'Item', 'Type', 'Qty', 'Unit Price (LKR)', 'Total (LKR)']]
         
         for idx, item in enumerate(items, 1):
+            item_type = item['item_type']
+            if item_type == 'CategoryService':
+                item_type = 'Service Charge'
             table_data.append([
                 str(idx),
                 item['item_name'],
-                item['item_type'],
+                item_type,
                 str(item['quantity']),
                 f"{item['unit_price']:.2f}",
                 f"{item['total_price']:.2f}"
@@ -109,13 +112,30 @@ class InvoiceGenerator:
         # Payment details
         story.append(Paragraph("Payment Details", heading_style))
         
+        # Get advance payment and category service cost
+        advance_payment = invoice_data.get('advance_payment', 0) or 0
+        category_service_cost = invoice_data.get('category_service_cost', 0) or 0
+        
         payment_data = [
             ['Subtotal:', f"LKR {invoice_data['subtotal']:.2f}"],
-            ['Discount:', f"LKR {invoice_data['discount']:.2f}"],
-            ['<b>Total Amount:</b>', f"<b>LKR {invoice_data['total_amount']:.2f}</b>"],
-            ['Paid Amount:', f"LKR {invoice_data['paid_amount']:.2f}"],
-            ['<b>Balance:</b>', f"<b>LKR {invoice_data['balance_amount']:.2f}</b>"]
         ]
+        
+        # Add category service cost if applicable
+        if category_service_cost > 0:
+            payment_data.append(['Category Service Cost:', f"LKR {category_service_cost:.2f}"])
+        
+        payment_data.append(['Discount:', f"LKR {invoice_data['discount']:.2f}"])
+        payment_data.append(['<b>Total Amount:</b>', f"<b>LKR {invoice_data['total_amount']:.2f}</b>"])
+        
+        # Add advance payment if applicable
+        if advance_payment > 0:
+            payment_data.append(['Advance Paid:', f"LKR {advance_payment:.2f}"])
+        
+        payment_data.append(['Amount Paid:', f"LKR {invoice_data['paid_amount']:.2f}"])
+        
+        # Calculate remaining balance (ensure non-negative)
+        remaining_balance = max(0, invoice_data['balance_amount'])
+        payment_data.append(['<b>Remaining Balance:</b>', f"<b>LKR {remaining_balance:.2f}</b>"])
         
         payment_table = Table(payment_data, colWidths=[3*inch, 2*inch])
         payment_table.setStyle(TableStyle([
@@ -124,12 +144,26 @@ class InvoiceGenerator:
             ('FONTSIZE', (0, 0), (-1, -1), 11),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
             ('TOPPADDING', (0, 0), (-1, -1), 8),
-            ('LINEABOVE', (0, 2), (-1, 2), 1, colors.black),
-            ('LINEABOVE', (0, 4), (-1, 4), 1, colors.black),
+            ('LINEABOVE', (0, -4 if category_service_cost > 0 else -3), (-1, -4 if category_service_cost > 0 else -3), 1, colors.black),
+            ('LINEABOVE', (0, -1), (-1, -1), 1, colors.black),
         ]))
         
         story.append(payment_table)
         story.append(Spacer(1, 0.5 * inch))
+        
+        # Payment status
+        if remaining_balance > 0:
+            status_text = f"<font color='red'><b>PAYMENT PENDING: LKR {remaining_balance:.2f}</b></font>"
+        else:
+            status_text = "<font color='green'><b>FULLY PAID</b></font>"
+        
+        story.append(Paragraph(status_text, ParagraphStyle(
+            'Status',
+            parent=normal_style,
+            fontSize=12,
+            alignment=TA_CENTER,
+            spaceAfter=20
+        )))
         
         # Footer
         story.append(Paragraph("Thank you for your business!", ParagraphStyle(

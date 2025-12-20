@@ -64,10 +64,17 @@ class DatabaseSchema:
             CREATE TABLE IF NOT EXISTS categories (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 category_name TEXT UNIQUE NOT NULL,
+                service_cost REAL DEFAULT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+        
+        # Add service_cost column if not exists (for existing databases)
+        try:
+            self.cursor.execute('ALTER TABLE categories ADD COLUMN service_cost REAL DEFAULT NULL')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
         
         # Services table
         self.cursor.execute('''
@@ -95,11 +102,25 @@ class DatabaseSchema:
                 frame_name TEXT NOT NULL,
                 size TEXT NOT NULL,
                 price REAL NOT NULL,
+                buying_price REAL DEFAULT 0,
+                selling_price REAL DEFAULT 0,
                 quantity INTEGER NOT NULL DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+        
+        # Add buying_price column if not exists (for existing databases)
+        try:
+            self.cursor.execute('ALTER TABLE photo_frames ADD COLUMN buying_price REAL DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        
+        # Add selling_price column if not exists (for existing databases)
+        try:
+            self.cursor.execute('ALTER TABLE photo_frames ADD COLUMN selling_price REAL DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
         
         # Invoices table
         self.cursor.execute('''
@@ -109,6 +130,8 @@ class DatabaseSchema:
                 customer_id INTEGER NOT NULL,
                 subtotal REAL NOT NULL,
                 discount REAL DEFAULT 0,
+                category_service_cost REAL DEFAULT 0,
+                advance_payment REAL DEFAULT 0,
                 total_amount REAL NOT NULL,
                 paid_amount REAL NOT NULL,
                 balance_amount REAL NOT NULL,
@@ -119,20 +142,39 @@ class DatabaseSchema:
             )
         ''')
         
+        # Add category_service_cost column if not exists
+        try:
+            self.cursor.execute('ALTER TABLE invoices ADD COLUMN category_service_cost REAL DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass
+        
+        # Add advance_payment column if not exists
+        try:
+            self.cursor.execute('ALTER TABLE invoices ADD COLUMN advance_payment REAL DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass
+        
         # Invoice items table
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS invoice_items (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 invoice_id INTEGER NOT NULL,
-                item_type TEXT NOT NULL CHECK(item_type IN ('Service', 'Frame')),
+                item_type TEXT NOT NULL CHECK(item_type IN ('Service', 'Frame', 'CategoryService')),
                 item_id INTEGER NOT NULL,
                 item_name TEXT NOT NULL,
                 quantity INTEGER NOT NULL DEFAULT 1,
                 unit_price REAL NOT NULL,
                 total_price REAL NOT NULL,
+                buying_price REAL DEFAULT 0,
                 FOREIGN KEY (invoice_id) REFERENCES invoices (id)
             )
         ''')
+        
+        # Add buying_price column if not exists
+        try:
+            self.cursor.execute('ALTER TABLE invoice_items ADD COLUMN buying_price REAL DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass
         
         # Bookings table
         self.cursor.execute('''

@@ -60,9 +60,9 @@ class DashboardService:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT COALESCE(SUM(ABS(balance_amount)), 0) 
+                SELECT COALESCE(SUM(balance_amount), 0) 
                 FROM invoices 
-                WHERE balance_amount < 0
+                WHERE balance_amount > 0
             ''')
             result = cursor.fetchone()[0]
             conn.close()
@@ -140,6 +140,127 @@ class DashboardService:
         except sqlite3.Error:
             return 0.0
     
+    # ==================== Photo Frame Profit Tracking (Admin Only) ====================
+    
+    def get_frame_profit_stats(self) -> Dict[str, Any]:
+        """Get photo frame profit statistics - Admin only"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            # Get total frames sold from invoice items
+            cursor.execute('''
+                SELECT 
+                    COALESCE(SUM(quantity), 0) as total_sold,
+                    COALESCE(SUM(total_price), 0) as total_selling,
+                    COALESCE(SUM(buying_price), 0) as total_buying
+                FROM invoice_items 
+                WHERE item_type = 'Frame'
+            ''')
+            result = cursor.fetchone()
+            
+            total_sold = result[0] or 0
+            total_selling = float(result[1] or 0)
+            total_buying = float(result[2] or 0)
+            net_profit = total_selling - total_buying
+            
+            conn.close()
+            
+            return {
+                'total_frames_sold': total_sold,
+                'total_buying_cost': total_buying,
+                'total_selling_amount': total_selling,
+                'net_profit': net_profit
+            }
+        except sqlite3.Error as e:
+            print(f"Error getting frame profit stats: {e}")
+            return {
+                'total_frames_sold': 0,
+                'total_buying_cost': 0,
+                'total_selling_amount': 0,
+                'net_profit': 0
+            }
+    
+    def get_today_frame_profit(self) -> Dict[str, Any]:
+        """Get today's photo frame profit - Admin only"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            today = datetime.now().strftime('%Y-%m-%d')
+            
+            cursor.execute('''
+                SELECT 
+                    COALESCE(SUM(ii.quantity), 0) as total_sold,
+                    COALESCE(SUM(ii.total_price), 0) as total_selling,
+                    COALESCE(SUM(ii.buying_price), 0) as total_buying
+                FROM invoice_items ii
+                JOIN invoices i ON ii.invoice_id = i.id
+                WHERE ii.item_type = 'Frame' AND DATE(i.created_at) = ?
+            ''', (today,))
+            result = cursor.fetchone()
+            
+            total_sold = result[0] or 0
+            total_selling = float(result[1] or 0)
+            total_buying = float(result[2] or 0)
+            net_profit = total_selling - total_buying
+            
+            conn.close()
+            
+            return {
+                'total_frames_sold': total_sold,
+                'total_buying_cost': total_buying,
+                'total_selling_amount': total_selling,
+                'net_profit': net_profit
+            }
+        except sqlite3.Error as e:
+            print(f"Error getting today's frame profit: {e}")
+            return {
+                'total_frames_sold': 0,
+                'total_buying_cost': 0,
+                'total_selling_amount': 0,
+                'net_profit': 0
+            }
+    
+    def get_monthly_frame_profit(self) -> Dict[str, Any]:
+        """Get monthly photo frame profit - Admin only"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            first_day = datetime.now().replace(day=1).strftime('%Y-%m-%d')
+            
+            cursor.execute('''
+                SELECT 
+                    COALESCE(SUM(ii.quantity), 0) as total_sold,
+                    COALESCE(SUM(ii.total_price), 0) as total_selling,
+                    COALESCE(SUM(ii.buying_price), 0) as total_buying
+                FROM invoice_items ii
+                JOIN invoices i ON ii.invoice_id = i.id
+                WHERE ii.item_type = 'Frame' AND DATE(i.created_at) >= ?
+            ''', (first_day,))
+            result = cursor.fetchone()
+            
+            total_sold = result[0] or 0
+            total_selling = float(result[1] or 0)
+            total_buying = float(result[2] or 0)
+            net_profit = total_selling - total_buying
+            
+            conn.close()
+            
+            return {
+                'total_frames_sold': total_sold,
+                'total_buying_cost': total_buying,
+                'total_selling_amount': total_selling,
+                'net_profit': net_profit
+            }
+        except sqlite3.Error as e:
+            print(f"Error getting monthly frame profit: {e}")
+            return {
+                'total_frames_sold': 0,
+                'total_buying_cost': 0,
+                'total_selling_amount': 0,
+                'net_profit': 0
+            }
+    
     def get_dashboard_stats(self) -> Dict[str, Any]:
         """Get all dashboard statistics"""
         return {
@@ -153,3 +274,11 @@ class DashboardService:
             'weekly_sales': self.get_weekly_sales(),
             'monthly_sales': self.get_monthly_sales(),
         }
+    
+    def get_admin_dashboard_stats(self) -> Dict[str, Any]:
+        """Get dashboard statistics including admin-only frame profit data"""
+        stats = self.get_dashboard_stats()
+        stats['frame_profit'] = self.get_frame_profit_stats()
+        stats['today_frame_profit'] = self.get_today_frame_profit()
+        stats['monthly_frame_profit'] = self.get_monthly_frame_profit()
+        return stats

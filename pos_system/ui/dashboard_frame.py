@@ -15,6 +15,10 @@ class DashboardFrame(ctk.CTkFrame):
         self.create_widgets()
         self.load_stats()
     
+    def is_admin(self):
+        """Check if current user is admin"""
+        return self.auth_manager.is_admin()
+    
     def create_widgets(self):
         """Create dashboard widgets"""
         
@@ -125,6 +129,62 @@ class DashboardFrame(ctk.CTkFrame):
         )
         self.total_invoices_card.pack(side="left", fill="both", expand=True, padx=(10, 0))
         
+        # Admin-only section: Photo Frame Profit Tracking
+        if self.is_admin():
+            # Section header
+            profit_header = ctk.CTkFrame(scroll_container, fg_color="#1e1e3f", corner_radius=10)
+            profit_header.pack(fill="x", pady=(20, 10))
+            
+            ctk.CTkLabel(
+                profit_header,
+                text="📊 Photo Frame Profit Analysis (Admin Only)",
+                font=ctk.CTkFont(size=16, weight="bold"),
+                text_color="#00d4ff"
+            ).pack(pady=15, padx=20, anchor="w")
+            
+            # Row 4 - Frame profit stats (Admin only)
+            row4 = ctk.CTkFrame(scroll_container, fg_color="transparent")
+            row4.pack(fill="x", pady=10)
+            
+            self.frames_sold_card = self.create_stat_card(
+                row4, "Total Frames Sold", "0", "🖼️", "#00d4ff"
+            )
+            self.frames_sold_card.pack(side="left", fill="both", expand=True, padx=(0, 10))
+            
+            self.buying_cost_card = self.create_stat_card(
+                row4, "Total Buying Cost", "LKR 0.00", "💵", "#ff9f43"
+            )
+            self.buying_cost_card.pack(side="left", fill="both", expand=True, padx=10)
+            
+            self.selling_amount_card = self.create_stat_card(
+                row4, "Total Selling Amount", "LKR 0.00", "💳", "#4ecdc4"
+            )
+            self.selling_amount_card.pack(side="left", fill="both", expand=True, padx=10)
+            
+            self.net_profit_card = self.create_stat_card(
+                row4, "Net Frame Profit", "LKR 0.00", "💎", "#00ff88"
+            )
+            self.net_profit_card.pack(side="left", fill="both", expand=True, padx=(10, 0))
+            
+            # Row 5 - Today and Monthly Frame Profit
+            row5 = ctk.CTkFrame(scroll_container, fg_color="transparent")
+            row5.pack(fill="x", pady=10)
+            
+            self.today_frame_profit_card = self.create_stat_card(
+                row5, "Today's Frame Profit", "LKR 0.00", "📅", "#c44dff"
+            )
+            self.today_frame_profit_card.pack(side="left", fill="both", expand=True, padx=(0, 10))
+            
+            self.monthly_frame_profit_card = self.create_stat_card(
+                row5, "Monthly Frame Profit", "LKR 0.00", "📆", "#45b7d1"
+            )
+            self.monthly_frame_profit_card.pack(side="left", fill="both", expand=True, padx=10)
+            
+            self.monthly_frames_sold_card = self.create_stat_card(
+                row5, "Monthly Frames Sold", "0", "🛒", "#ffd93d"
+            )
+            self.monthly_frames_sold_card.pack(side="left", fill="both", expand=True, padx=(10, 0))
+        
         # Quick actions - inside scrollable area
         actions_frame = ctk.CTkFrame(scroll_container, fg_color="#1e1e3f", corner_radius=15)
         actions_frame.pack(fill="x", pady=20)
@@ -198,7 +258,11 @@ class DashboardFrame(ctk.CTkFrame):
     
     def load_stats(self):
         """Load dashboard statistics"""
-        stats = self.dashboard_service.get_dashboard_stats()
+        # Load appropriate stats based on user role
+        if self.is_admin():
+            stats = self.dashboard_service.get_admin_dashboard_stats()
+        else:
+            stats = self.dashboard_service.get_dashboard_stats()
         
         # Update cards
         self.today_sales_card.value_label.configure(
@@ -228,3 +292,44 @@ class DashboardFrame(ctk.CTkFrame):
         self.total_invoices_card.value_label.configure(
             text=str(stats['total_invoices'])
         )
+        
+        # Update admin-only frame profit cards
+        if self.is_admin():
+            frame_profit = stats.get('frame_profit', {})
+            today_profit = stats.get('today_frame_profit', {})
+            monthly_profit = stats.get('monthly_frame_profit', {})
+            
+            self.frames_sold_card.value_label.configure(
+                text=str(frame_profit.get('total_frames_sold', 0))
+            )
+            self.buying_cost_card.value_label.configure(
+                text=f"LKR {frame_profit.get('total_buying_cost', 0):,.2f}"
+            )
+            self.selling_amount_card.value_label.configure(
+                text=f"LKR {frame_profit.get('total_selling_amount', 0):,.2f}"
+            )
+            
+            net_profit = frame_profit.get('net_profit', 0)
+            profit_color = "#00ff88" if net_profit >= 0 else "#ff6b6b"
+            self.net_profit_card.value_label.configure(
+                text=f"LKR {net_profit:,.2f}",
+                text_color=profit_color
+            )
+            
+            today_frame_profit = today_profit.get('net_profit', 0)
+            today_color = "#00ff88" if today_frame_profit >= 0 else "#ff6b6b"
+            self.today_frame_profit_card.value_label.configure(
+                text=f"LKR {today_frame_profit:,.2f}",
+                text_color=today_color
+            )
+            
+            monthly_frame_profit = monthly_profit.get('net_profit', 0)
+            monthly_color = "#00ff88" if monthly_frame_profit >= 0 else "#ff6b6b"
+            self.monthly_frame_profit_card.value_label.configure(
+                text=f"LKR {monthly_frame_profit:,.2f}",
+                text_color=monthly_color
+            )
+            
+            self.monthly_frames_sold_card.value_label.configure(
+                text=str(monthly_profit.get('total_frames_sold', 0))
+            )
