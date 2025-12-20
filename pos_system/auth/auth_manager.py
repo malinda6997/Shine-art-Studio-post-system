@@ -77,6 +77,7 @@ class AuthManager:
                 'can_access_users': True,
                 'can_access_settings': True,
                 'can_access_permissions': True,
+                'can_access_staff_reports': True,
                 'can_access_profile': True
             }
         else:

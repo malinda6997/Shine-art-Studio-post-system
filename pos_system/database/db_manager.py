@@ -482,3 +482,65 @@ class DatabaseManager:
             ORDER BY u.full_name
         '''
         return self.execute_query(query)
+
+    # ==================== Staff Daily Reports Operations ====================
+    
+    def get_all_users_for_reports(self) -> List[Dict[str, Any]]:
+        """Get all users (staff and admin) for reporting"""
+        query = '''
+            SELECT id, username, full_name, role, is_active 
+            FROM users 
+            ORDER BY role DESC, full_name
+        '''
+        return self.execute_query(query)
+    
+    def get_staff_invoices_by_date(self, user_id: int, date: str) -> List[Dict[str, Any]]:
+        """Get all invoices created by a staff member on a specific date"""
+        query = '''
+            SELECT i.*, c.full_name as customer_name, c.mobile_number as customer_mobile
+            FROM invoices i
+            LEFT JOIN customers c ON i.customer_id = c.id
+            WHERE i.created_by = ? AND DATE(i.created_at) = ?
+            ORDER BY i.created_at ASC
+        '''
+        return self.execute_query(query, (user_id, date))
+    
+    def get_staff_bookings_by_date(self, user_id: int, date: str) -> List[Dict[str, Any]]:
+        """Get all bookings created by a staff member on a specific date"""
+        query = '''
+            SELECT * FROM bookings
+            WHERE created_by = ? AND DATE(created_at) = ?
+            ORDER BY created_at ASC
+        '''
+        return self.execute_query(query, (user_id, date))
+    
+    def get_staff_customers_by_date(self, user_id: int, date: str) -> List[Dict[str, Any]]:
+        """Get all customers added on a specific date
+        Note: Customers table doesn't have created_by, so we return all customers from that date
+        """
+        query = '''
+            SELECT * FROM customers
+            WHERE DATE(created_at) = ?
+            ORDER BY created_at ASC
+        '''
+        return self.execute_query(query, (date,))
+    
+    def get_staff_daily_summary(self, user_id: int, date: str) -> Dict[str, Any]:
+        """Get a summary of staff daily work"""
+        invoices = self.get_staff_invoices_by_date(user_id, date)
+        bookings = self.get_staff_bookings_by_date(user_id, date)
+        
+        total_invoice_amount = sum(inv.get('total_amount', 0) for inv in invoices)
+        total_paid = sum(inv.get('paid_amount', 0) for inv in invoices)
+        total_booking_amount = sum(b.get('full_amount', 0) for b in bookings)
+        total_advance = sum(b.get('advance_payment', 0) for b in bookings)
+        
+        return {
+            'invoice_count': len(invoices),
+            'total_invoice_amount': total_invoice_amount,
+            'total_paid': total_paid,
+            'booking_count': len(bookings),
+            'total_booking_amount': total_booking_amount,
+            'total_advance': total_advance
+        }
+
