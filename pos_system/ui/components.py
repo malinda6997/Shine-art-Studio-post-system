@@ -246,6 +246,7 @@ class LoginWindow(ctk.CTkToplevel):
     def __init__(self, parent, auth_manager, on_success: Callable):
         super().__init__(parent)
         
+        self.parent = parent
         self.auth_manager = auth_manager
         self.on_success = on_success
         
@@ -268,6 +269,9 @@ class LoginWindow(ctk.CTkToplevel):
         
         # Prevent resize
         self.resizable(False, False)
+        
+        # Handle window close event (X button or Alt+F4)
+        self.protocol("WM_DELETE_WINDOW", self.on_close)
         
         self.create_widgets()
         
@@ -458,6 +462,11 @@ class LoginWindow(ctk.CTkToplevel):
             Toast.error(self, "Invalid username or password")
             self.password_entry.delete(0, 'end')
             self.password_entry.focus()
+    
+    def on_close(self):
+        """Handle window close event - exit entire application"""
+        self.destroy()
+        self.parent.destroy()
 
 
 class MessageDialog:

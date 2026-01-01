@@ -274,6 +274,13 @@ class MainApplication(ctk.CTk):
                 self.main_container.destroy()
                 self.main_container = None
             
+            # Reset references
+            self.content_frame = None
+            self.sidebar = None
+            
+            # Hide the main window before showing login
+            self.withdraw()
+            
             # Show login
             self.show_login()
 
