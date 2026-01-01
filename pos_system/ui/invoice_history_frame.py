@@ -165,6 +165,19 @@ class InvoiceHistoryFrame(BaseFrame):
         dialog.transient(self)
         dialog.grab_set()
         
+        # Helper to properly close dialog
+        def close_dialog():
+            try:
+                dialog.grab_release()
+            except:
+                pass
+            dialog.destroy()
+            # Restore focus to main window
+            self.winfo_toplevel().focus_force()
+        
+        # Handle window close
+        dialog.protocol("WM_DELETE_WINDOW", close_dialog)
+        
         # Center dialog
         dialog.update_idletasks()
         x = (dialog.winfo_screenwidth() // 2) - 350
@@ -259,7 +272,7 @@ Balance: LKR {invoice['balance_amount']:.2f}
         ctk.CTkButton(
             details_frame,
             text="Close",
-            command=dialog.destroy,
+            command=close_dialog,
             width=150,
             height=40
         ).pack(pady=10)

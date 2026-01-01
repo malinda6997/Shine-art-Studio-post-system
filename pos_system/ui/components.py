@@ -198,10 +198,18 @@ class ModernConfirmDialog(ctk.CTkToplevel):
     
     def on_confirm(self):
         self.result = True
-        self.destroy()
+        self._close_dialog()
     
     def on_cancel(self):
         self.result = False
+        self._close_dialog()
+    
+    def _close_dialog(self):
+        """Properly close dialog and release grab"""
+        try:
+            self.grab_release()
+        except:
+            pass
         self.destroy()
     
     def get_result(self) -> bool:
@@ -475,7 +483,11 @@ class LoginWindow(ctk.CTkToplevel):
         user = self.auth_manager.authenticate(username, password)
         
         if user:
-            # No popup - just login directly
+            # Release grab before destroying to prevent input freeze
+            try:
+                self.grab_release()
+            except:
+                pass
             self.destroy()
             self.on_success(user)
         else:
@@ -485,6 +497,10 @@ class LoginWindow(ctk.CTkToplevel):
     
     def on_close(self):
         """Handle window close event - exit entire application"""
+        try:
+            self.grab_release()
+        except:
+            pass
         self.destroy()
         self.parent.destroy()
 
@@ -553,3 +569,21 @@ class BaseFrame(ctk.CTkFrame):
     def is_admin(self) -> bool:
         """Check if current user is admin"""
         return self.auth_manager.is_admin()
+    
+    def restore_focus(self, widget=None):
+        """Restore focus to widget or main window after dialog/popup closes"""
+        try:
+            self.winfo_toplevel().focus_force()
+            if widget:
+                widget.focus_set()
+        except:
+            pass
+    
+    def ensure_inputs_enabled(self, *widgets):
+        """Ensure input widgets are in normal state and editable"""
+        for widget in widgets:
+            try:
+                if hasattr(widget, 'configure'):
+                    widget.configure(state="normal")
+            except:
+                pass
