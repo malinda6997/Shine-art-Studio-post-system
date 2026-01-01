@@ -4,7 +4,7 @@ from ui.components import BaseFrame, MessageDialog
 
 
 class FrameManagementFrame(BaseFrame):
-    """Photo frame management interface"""
+    """Photo frame management interface with profit tracking"""
     
     def __init__(self, parent, auth_manager, db_manager):
         super().__init__(parent, auth_manager, db_manager)
@@ -27,37 +27,56 @@ class FrameManagementFrame(BaseFrame):
         input_frame = ctk.CTkFrame(self, fg_color="#1e1e3f", corner_radius=15)
         input_frame.pack(fill="x", padx=20, pady=(0, 20))
         
-        # Frame name
+        # Row 0: Frame name and Size
         name_label = ctk.CTkLabel(input_frame, text="Frame Name:", font=ctk.CTkFont(size=13, weight="bold"))
         name_label.grid(row=0, column=0, padx=15, pady=10, sticky="w")
         
         self.name_entry = ctk.CTkEntry(input_frame, width=200, height=35)
         self.name_entry.grid(row=0, column=1, padx=15, pady=10)
         
-        # Size
         size_label = ctk.CTkLabel(input_frame, text="Size:", font=ctk.CTkFont(size=13, weight="bold"))
         size_label.grid(row=0, column=2, padx=15, pady=10, sticky="w")
         
         self.size_entry = ctk.CTkEntry(input_frame, width=120, height=35)
         self.size_entry.grid(row=0, column=3, padx=15, pady=10)
         
-        # Price
-        price_label = ctk.CTkLabel(input_frame, text="Price (LKR):", font=ctk.CTkFont(size=13, weight="bold"))
-        price_label.grid(row=1, column=0, padx=15, pady=10, sticky="w")
+        # Row 1: Buying Price and Selling Price (Admin only for buying)
+        buying_label = ctk.CTkLabel(input_frame, text="Buying Price (LKR):", font=ctk.CTkFont(size=13, weight="bold"))
+        buying_label.grid(row=1, column=0, padx=15, pady=10, sticky="w")
+        
+        self.buying_price_entry = ctk.CTkEntry(input_frame, width=200, height=35)
+        self.buying_price_entry.grid(row=1, column=1, padx=15, pady=10)
+        
+        selling_label = ctk.CTkLabel(input_frame, text="Selling Price (LKR):", font=ctk.CTkFont(size=13, weight="bold"))
+        selling_label.grid(row=1, column=2, padx=15, pady=10, sticky="w")
+        
+        self.selling_price_entry = ctk.CTkEntry(input_frame, width=120, height=35)
+        self.selling_price_entry.grid(row=1, column=3, padx=15, pady=10)
+        
+        # Hide buying price for non-admin users
+        if not self.is_admin():
+            buying_label.grid_forget()
+            self.buying_price_entry.grid_forget()
+            # Move selling to buying position
+            selling_label.grid(row=1, column=0, padx=15, pady=10, sticky="w")
+            self.selling_price_entry.grid(row=1, column=1, padx=15, pady=10)
+        
+        # Row 2: Display Price (legacy) and Quantity
+        price_label = ctk.CTkLabel(input_frame, text="Display Price (LKR):", font=ctk.CTkFont(size=13, weight="bold"))
+        price_label.grid(row=2, column=0, padx=15, pady=10, sticky="w")
         
         self.price_entry = ctk.CTkEntry(input_frame, width=200, height=35)
-        self.price_entry.grid(row=1, column=1, padx=15, pady=10)
+        self.price_entry.grid(row=2, column=1, padx=15, pady=10)
         
-        # Quantity
         quantity_label = ctk.CTkLabel(input_frame, text="Quantity:", font=ctk.CTkFont(size=13, weight="bold"))
-        quantity_label.grid(row=1, column=2, padx=15, pady=10, sticky="w")
+        quantity_label.grid(row=2, column=2, padx=15, pady=10, sticky="w")
         
         self.quantity_entry = ctk.CTkEntry(input_frame, width=120, height=35)
-        self.quantity_entry.grid(row=1, column=3, padx=15, pady=10)
+        self.quantity_entry.grid(row=2, column=3, padx=15, pady=10)
         
         # Buttons
         btn_frame = ctk.CTkFrame(input_frame, fg_color="transparent")
-        btn_frame.grid(row=2, column=0, columnspan=4, pady=15)
+        btn_frame.grid(row=3, column=0, columnspan=4, pady=15)
         
         self.add_btn = ctk.CTkButton(
             btn_frame,
@@ -114,24 +133,47 @@ class FrameManagementFrame(BaseFrame):
         table_frame = ctk.CTkFrame(self, fg_color="#1e1e3f", corner_radius=15)
         table_frame.pack(fill="both", expand=True, padx=20, pady=(0, 20))
         
-        # Create Treeview
-        columns = ("ID", "Frame Name", "Size", "Price", "Quantity", "Created At")
-        self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=12)
-        
-        # Configure columns
-        self.tree.heading("ID", text="ID")
-        self.tree.heading("Frame Name", text="Frame Name")
-        self.tree.heading("Size", text="Size")
-        self.tree.heading("Price", text="Price (LKR)")
-        self.tree.heading("Quantity", text="Quantity")
-        self.tree.heading("Created At", text="Created At")
-        
-        self.tree.column("ID", width=50, anchor="center")
-        self.tree.column("Frame Name", width=200)
-        self.tree.column("Size", width=100, anchor="center")
-        self.tree.column("Price", width=120, anchor="e")
-        self.tree.column("Quantity", width=100, anchor="center")
-        self.tree.column("Created At", width=180)
+        # Create Treeview - columns vary based on admin status
+        if self.is_admin():
+            columns = ("ID", "Frame Name", "Size", "Buying", "Selling", "Price", "Qty", "Profit", "Created At")
+            self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=12)
+            
+            self.tree.heading("ID", text="ID")
+            self.tree.heading("Frame Name", text="Frame Name")
+            self.tree.heading("Size", text="Size")
+            self.tree.heading("Buying", text="Buying (LKR)")
+            self.tree.heading("Selling", text="Selling (LKR)")
+            self.tree.heading("Price", text="Display Price")
+            self.tree.heading("Qty", text="Qty")
+            self.tree.heading("Profit", text="Profit/Unit")
+            self.tree.heading("Created At", text="Created At")
+            
+            self.tree.column("ID", width=40, anchor="center")
+            self.tree.column("Frame Name", width=150)
+            self.tree.column("Size", width=70, anchor="center")
+            self.tree.column("Buying", width=90, anchor="e")
+            self.tree.column("Selling", width=90, anchor="e")
+            self.tree.column("Price", width=90, anchor="e")
+            self.tree.column("Qty", width=50, anchor="center")
+            self.tree.column("Profit", width=80, anchor="e")
+            self.tree.column("Created At", width=150)
+        else:
+            columns = ("ID", "Frame Name", "Size", "Price", "Quantity", "Created At")
+            self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=12)
+            
+            self.tree.heading("ID", text="ID")
+            self.tree.heading("Frame Name", text="Frame Name")
+            self.tree.heading("Size", text="Size")
+            self.tree.heading("Price", text="Price (LKR)")
+            self.tree.heading("Quantity", text="Quantity")
+            self.tree.heading("Created At", text="Created At")
+            
+            self.tree.column("ID", width=50, anchor="center")
+            self.tree.column("Frame Name", width=200)
+            self.tree.column("Size", width=100, anchor="center")
+            self.tree.column("Price", width=120, anchor="e")
+            self.tree.column("Quantity", width=100, anchor="center")
+            self.tree.column("Created At", width=180)
         
         # Scrollbar
         scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
@@ -149,6 +191,8 @@ class FrameManagementFrame(BaseFrame):
         size = self.size_entry.get().strip()
         price = self.price_entry.get().strip()
         quantity = self.quantity_entry.get().strip()
+        buying_price = self.buying_price_entry.get().strip() if self.is_admin() else "0"
+        selling_price = self.selling_price_entry.get().strip()
         
         if not name:
             MessageDialog.show_error("Error", "Please enter frame name")
@@ -159,14 +203,32 @@ class FrameManagementFrame(BaseFrame):
             return
         
         if not price or not self.validate_number(price, allow_decimal=True):
-            MessageDialog.show_error("Error", "Please enter valid price")
+            MessageDialog.show_error("Error", "Please enter valid display price")
             return
         
         if not quantity or not self.validate_number(quantity):
             MessageDialog.show_error("Error", "Please enter valid quantity")
             return
         
-        frame_id = self.db_manager.add_photo_frame(name, size, float(price), int(quantity))
+        if not selling_price or not self.validate_number(selling_price, allow_decimal=True):
+            MessageDialog.show_error("Error", "Please enter valid selling price")
+            return
+        
+        if self.is_admin() and buying_price and not self.validate_number(buying_price, allow_decimal=True):
+            MessageDialog.show_error("Error", "Please enter valid buying price")
+            return
+        
+        buying = float(buying_price) if buying_price else 0
+        selling = float(selling_price)
+        
+        # Validate selling price > buying price for profit
+        if self.is_admin() and selling < buying:
+            if not MessageDialog.show_confirm("Warning", "Selling price is less than buying price. Continue?"):
+                return
+        
+        frame_id = self.db_manager.add_photo_frame(
+            name, size, float(price), int(quantity), buying, selling
+        )
         
         if frame_id:
             MessageDialog.show_success("Success", "Photo frame added successfully")
@@ -185,6 +247,8 @@ class FrameManagementFrame(BaseFrame):
         size = self.size_entry.get().strip()
         price = self.price_entry.get().strip()
         quantity = self.quantity_entry.get().strip()
+        buying_price = self.buying_price_entry.get().strip() if self.is_admin() else "0"
+        selling_price = self.selling_price_entry.get().strip()
         
         if not name:
             MessageDialog.show_error("Error", "Please enter frame name")
@@ -195,15 +259,32 @@ class FrameManagementFrame(BaseFrame):
             return
         
         if not price or not self.validate_number(price, allow_decimal=True):
-            MessageDialog.show_error("Error", "Please enter valid price")
+            MessageDialog.show_error("Error", "Please enter valid display price")
             return
         
         if not quantity or not self.validate_number(quantity):
             MessageDialog.show_error("Error", "Please enter valid quantity")
             return
         
+        if not selling_price or not self.validate_number(selling_price, allow_decimal=True):
+            MessageDialog.show_error("Error", "Please enter valid selling price")
+            return
+        
+        if self.is_admin() and buying_price and not self.validate_number(buying_price, allow_decimal=True):
+            MessageDialog.show_error("Error", "Please enter valid buying price")
+            return
+        
+        buying = float(buying_price) if buying_price else 0
+        selling = float(selling_price)
+        
+        # Get existing values if not admin (preserve buying price)
+        if not self.is_admin():
+            existing = self.db_manager.get_photo_frame_by_id(self.selected_frame_id)
+            if existing:
+                buying = existing.get('buying_price', 0) or 0
+        
         success = self.db_manager.update_photo_frame(
-            self.selected_frame_id, name, size, float(price), int(quantity)
+            self.selected_frame_id, name, size, float(price), int(quantity), buying, selling
         )
         
         if success:
@@ -241,6 +322,9 @@ class FrameManagementFrame(BaseFrame):
         self.size_entry.delete(0, 'end')
         self.price_entry.delete(0, 'end')
         self.quantity_entry.delete(0, 'end')
+        self.selling_price_entry.delete(0, 'end')
+        if self.is_admin():
+            self.buying_price_entry.delete(0, 'end')
         self.selected_frame_id = None
         self.add_btn.configure(state="normal")
         self.update_btn.configure(state="disabled")
@@ -256,16 +340,34 @@ class FrameManagementFrame(BaseFrame):
         frames = self.db_manager.get_all_photo_frames()
         
         for frame in frames:
+            buying = frame.get('buying_price', 0) or 0
+            selling = frame.get('selling_price', 0) or 0
+            profit = selling - buying
+            
             # Color code low stock items
             tags = ('low_stock',) if frame['quantity'] < 10 else ()
-            self.tree.insert("", "end", values=(
-                frame['id'],
-                frame['frame_name'],
-                frame['size'],
-                f"{frame['price']:.2f}",
-                frame['quantity'],
-                frame['created_at']
-            ), tags=tags)
+            
+            if self.is_admin():
+                self.tree.insert("", "end", values=(
+                    frame['id'],
+                    frame['frame_name'],
+                    frame['size'],
+                    f"{buying:.2f}",
+                    f"{selling:.2f}",
+                    f"{frame['price']:.2f}",
+                    frame['quantity'],
+                    f"{profit:.2f}",
+                    frame['created_at']
+                ), tags=tags)
+            else:
+                self.tree.insert("", "end", values=(
+                    frame['id'],
+                    frame['frame_name'],
+                    frame['size'],
+                    f"{frame['price']:.2f}",
+                    frame['quantity'],
+                    frame['created_at']
+                ), tags=tags)
         
         # Configure tag colors
         self.tree.tag_configure('low_stock', background='#8B0000')
@@ -284,10 +386,28 @@ class FrameManagementFrame(BaseFrame):
         self.name_entry.insert(0, values[1])
         self.size_entry.delete(0, 'end')
         self.size_entry.insert(0, values[2])
-        self.price_entry.delete(0, 'end')
-        self.price_entry.insert(0, values[3])
-        self.quantity_entry.delete(0, 'end')
-        self.quantity_entry.insert(0, values[4])
+        
+        if self.is_admin():
+            # Admin view: ID, Name, Size, Buying, Selling, Price, Qty, Profit, Created
+            self.buying_price_entry.delete(0, 'end')
+            self.buying_price_entry.insert(0, values[3])
+            self.selling_price_entry.delete(0, 'end')
+            self.selling_price_entry.insert(0, values[4])
+            self.price_entry.delete(0, 'end')
+            self.price_entry.insert(0, values[5])
+            self.quantity_entry.delete(0, 'end')
+            self.quantity_entry.insert(0, values[6])
+        else:
+            # Staff view: ID, Name, Size, Price, Qty, Created
+            self.price_entry.delete(0, 'end')
+            self.price_entry.insert(0, values[3])
+            self.quantity_entry.delete(0, 'end')
+            self.quantity_entry.insert(0, values[4])
+            # Get selling price from database
+            frame_data = self.db_manager.get_photo_frame_by_id(self.selected_frame_id)
+            if frame_data:
+                self.selling_price_entry.delete(0, 'end')
+                self.selling_price_entry.insert(0, f"{frame_data.get('selling_price', 0) or 0:.2f}")
         
         self.add_btn.configure(state="disabled")
         self.update_btn.configure(state="normal")

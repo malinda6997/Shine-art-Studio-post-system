@@ -20,6 +20,9 @@ from ui.settings_frame import SettingsFrame
 from ui.support_frame import SupportFrame
 from ui.user_guide_frame import UserGuideFrame
 from ui.profile_frame import ProfileFrame
+from ui.category_frame import CategoryManagementFrame
+from ui.permissions_frame import PermissionsFrame
+from ui.staff_reports_frame import StaffReportsFrame
 from services.user_service import UserService
 
 
@@ -161,53 +164,9 @@ class MainApplication(ctk.CTk):
         )
         title_label.pack(side="left")
         
-        # Right side of top bar - User profile section
+        # Right side of top bar - Logout only
         right_frame = ctk.CTkFrame(top_bar, fg_color="transparent")
         right_frame.pack(side="right", padx=20)
-        
-        # User profile container (clickable)
-        user_profile_frame = ctk.CTkFrame(right_frame, fg_color="#252545", corner_radius=25)
-        user_profile_frame.pack(side="right", padx=(10, 0))
-        
-        # Profile picture
-        profile_img = self.load_profile_image(self.current_user['id'], (35, 35))
-        if profile_img:
-            self.profile_image_label = ctk.CTkLabel(user_profile_frame, image=profile_img, text="")
-        else:
-            # Default avatar
-            self.profile_image_label = ctk.CTkLabel(
-                user_profile_frame,
-                text="👤",
-                font=ctk.CTkFont(size=20),
-                width=35,
-                height=35
-            )
-        self.profile_image_label.pack(side="left", padx=(8, 5), pady=5)
-        
-        # User name and role
-        user_info_frame = ctk.CTkFrame(user_profile_frame, fg_color="transparent")
-        user_info_frame.pack(side="left", padx=(0, 10), pady=5)
-        
-        user_name = ctk.CTkLabel(
-            user_info_frame,
-            text=self.current_user['full_name'],
-            font=ctk.CTkFont(size=12, weight="bold"),
-            text_color="white"
-        )
-        user_name.pack(anchor="w")
-        
-        user_role = ctk.CTkLabel(
-            user_info_frame,
-            text=self.current_user['role'],
-            font=ctk.CTkFont(size=10),
-            text_color="#00d4ff"
-        )
-        user_role.pack(anchor="w")
-        
-        # Make profile clickable
-        for widget in [user_profile_frame, self.profile_image_label, user_info_frame, user_name, user_role]:
-            widget.bind("<Button-1>", lambda e: self.navigate_to("profile"))
-            widget.configure(cursor="hand2")
         
         # Logout button
         logout_btn = ctk.CTkButton(
@@ -233,14 +192,37 @@ class MainApplication(ctk.CTk):
         MessageDialog.set_parent(self.content_frame)
     
     def update_profile_display(self):
-        """Update profile picture in top bar"""
-        if self.profile_image_label and self.current_user:
-            profile_img = self.load_profile_image(self.current_user['id'], (35, 35))
-            if profile_img:
-                self.profile_image_label.configure(image=profile_img, text="")
+        """Update profile picture - called when profile is updated"""
+        # Sidebar avatar will be updated on next login
+        pass
     
     def navigate_to(self, page: str):
         """Navigate to a specific page"""
+        # Permission mapping for each page
+        permission_map = {
+            "dashboard": "can_access_dashboard",
+            "billing": "can_access_billing",
+            "customers": "can_access_customers",
+            "categories": "can_access_categories",
+            "services": "can_access_services",
+            "frames": "can_access_frames",
+            "bookings": "can_access_bookings",
+            "invoices": "can_access_invoices",
+            "users": "can_access_users",
+            "permissions": "can_access_permissions",
+            "staff_reports": "can_access_staff_reports",
+            "settings": "can_access_settings",
+            "profile": "can_access_profile",
+            "support": "can_access_support",
+            "guide": "can_access_user_guide",
+        }
+        
+        # Check permission before navigating
+        required_permission = permission_map.get(page)
+        if required_permission and not self.auth_manager.has_permission(required_permission):
+            Toast.show_toast(self, "Access Denied", "You don't have permission to access this feature.", "error")
+            return
+        
         self.clear_content()
         
         # Update sidebar active state
@@ -251,11 +233,14 @@ class MainApplication(ctk.CTk):
             "dashboard": DashboardFrame,
             "billing": BillingFrame,
             "customers": CustomerManagementFrame,
+            "categories": CategoryManagementFrame,
             "services": ServiceManagementFrame,
             "frames": FrameManagementFrame,
             "bookings": BookingManagementFrame,
             "invoices": InvoiceHistoryFrame,
             "users": UsersManagementFrame,
+            "permissions": PermissionsFrame,
+            "staff_reports": StaffReportsFrame,
             "settings": SettingsFrame,
             "profile": ProfileFrame,
             "support": SupportFrame,
@@ -264,8 +249,8 @@ class MainApplication(ctk.CTk):
         
         frame_class = frame_classes.get(page)
         if frame_class:
-            # Pass main_app reference to ProfileFrame for updating display
-            if page == "profile":
+            # Pass main_app reference to ProfileFrame and DashboardFrame
+            if page in ["profile", "dashboard"]:
                 frame = frame_class(self.content_frame, self.auth_manager, self.db_manager, self)
             else:
                 frame = frame_class(self.content_frame, self.auth_manager, self.db_manager)

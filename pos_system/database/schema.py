@@ -42,6 +42,12 @@ class DatabaseSchema:
         except sqlite3.OperationalError:
             pass  # Column already exists
         
+        # Add last_login column if not exists (for existing databases)
+        try:
+            self.cursor.execute('ALTER TABLE users ADD COLUMN last_login TEXT DEFAULT NULL')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        
         # Customers table
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS customers (
@@ -53,16 +59,41 @@ class DatabaseSchema:
             )
         ''')
         
+        # Categories table
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS categories (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                category_name TEXT UNIQUE NOT NULL,
+                service_cost REAL DEFAULT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Add service_cost column if not exists (for existing databases)
+        try:
+            self.cursor.execute('ALTER TABLE categories ADD COLUMN service_cost REAL DEFAULT NULL')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        
         # Services table
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS services (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 service_name TEXT NOT NULL,
+                category_id INTEGER,
                 price REAL NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (category_id) REFERENCES categories (id)
             )
         ''')
+        
+        # Add category_id column if not exists (for existing databases)
+        try:
+            self.cursor.execute('ALTER TABLE services ADD COLUMN category_id INTEGER')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
         
         # Photo frames table
         self.cursor.execute('''
@@ -71,20 +102,37 @@ class DatabaseSchema:
                 frame_name TEXT NOT NULL,
                 size TEXT NOT NULL,
                 price REAL NOT NULL,
+                buying_price REAL DEFAULT 0,
+                selling_price REAL DEFAULT 0,
                 quantity INTEGER NOT NULL DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
         
-        # Invoices table
+        # Add buying_price column if not exists (for existing databases)
+        try:
+            self.cursor.execute('ALTER TABLE photo_frames ADD COLUMN buying_price REAL DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        
+        # Add selling_price column if not exists (for existing databases)
+        try:
+            self.cursor.execute('ALTER TABLE photo_frames ADD COLUMN selling_price REAL DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        
+        # Invoices table - customer_id is NULL for guest customers
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS invoices (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 invoice_number TEXT UNIQUE NOT NULL,
-                customer_id INTEGER NOT NULL,
+                customer_id INTEGER,
+                guest_name TEXT,
                 subtotal REAL NOT NULL,
                 discount REAL DEFAULT 0,
+                category_service_cost REAL DEFAULT 0,
+                advance_payment REAL DEFAULT 0,
                 total_amount REAL NOT NULL,
                 paid_amount REAL NOT NULL,
                 balance_amount REAL NOT NULL,
@@ -95,20 +143,45 @@ class DatabaseSchema:
             )
         ''')
         
+        # Add guest_name column if not exists (for existing databases)
+        try:
+            self.cursor.execute('ALTER TABLE invoices ADD COLUMN guest_name TEXT')
+        except sqlite3.OperationalError:
+            pass
+        
+        # Add category_service_cost column if not exists
+        try:
+            self.cursor.execute('ALTER TABLE invoices ADD COLUMN category_service_cost REAL DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass
+        
+        # Add advance_payment column if not exists
+        try:
+            self.cursor.execute('ALTER TABLE invoices ADD COLUMN advance_payment REAL DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass
+        
         # Invoice items table
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS invoice_items (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 invoice_id INTEGER NOT NULL,
-                item_type TEXT NOT NULL CHECK(item_type IN ('Service', 'Frame')),
+                item_type TEXT NOT NULL CHECK(item_type IN ('Service', 'Frame', 'CategoryService')),
                 item_id INTEGER NOT NULL,
                 item_name TEXT NOT NULL,
                 quantity INTEGER NOT NULL DEFAULT 1,
                 unit_price REAL NOT NULL,
                 total_price REAL NOT NULL,
+                buying_price REAL DEFAULT 0,
                 FOREIGN KEY (invoice_id) REFERENCES invoices (id)
             )
         ''')
+        
+        # Add buying_price column if not exists
+        try:
+            self.cursor.execute('ALTER TABLE invoice_items ADD COLUMN buying_price REAL DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass
         
         # Bookings table
         self.cursor.execute('''
@@ -128,6 +201,27 @@ class DatabaseSchema:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (created_by) REFERENCES users (id)
+            )
+        ''')
+        
+        # User Permissions table
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_permissions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL UNIQUE,
+                can_access_dashboard INTEGER DEFAULT 1,
+                can_access_billing INTEGER DEFAULT 1,
+                can_access_customers INTEGER DEFAULT 1,
+                can_access_categories INTEGER DEFAULT 1,
+                can_access_services INTEGER DEFAULT 1,
+                can_access_frames INTEGER DEFAULT 1,
+                can_access_bookings INTEGER DEFAULT 1,
+                can_access_invoices INTEGER DEFAULT 1,
+                can_access_support INTEGER DEFAULT 1,
+                can_access_user_guide INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id)
             )
         ''')
         
@@ -202,7 +296,7 @@ class DatabaseSchema:
         self.connect()
         
         tables = ['invoice_items', 'invoices', 'bookings', 'photo_frames', 
-                  'services', 'customers', 'users']
+                  'services', 'categories', 'customers', 'users']
         
         for table in tables:
             self.cursor.execute(f'DROP TABLE IF EXISTS {table}')

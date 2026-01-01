@@ -64,6 +64,26 @@ class DatabaseManager:
         '''
         return self.execute_insert(query, (full_name, mobile_number))
     
+    def update_customer(self, customer_id: int, full_name: str, mobile_number: str) -> bool:
+        """Update customer details"""
+        query = '''
+            UPDATE customers 
+            SET full_name = ?, mobile_number = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        '''
+        return self.execute_update(query, (full_name, mobile_number, customer_id))
+    
+    def delete_customer(self, customer_id: int) -> bool:
+        """Delete a customer"""
+        query = 'DELETE FROM customers WHERE id = ?'
+        return self.execute_update(query, (customer_id,))
+    
+    def get_customer_by_id(self, customer_id: int) -> Optional[Dict[str, Any]]:
+        """Get customer by ID"""
+        query = 'SELECT * FROM customers WHERE id = ?'
+        results = self.execute_query(query, (customer_id,))
+        return results[0] if results else None
+    
     def get_customer_by_mobile(self, mobile_number: str) -> Optional[Dict[str, Any]]:
         """Get customer by mobile number"""
         query = 'SELECT * FROM customers WHERE mobile_number = ?'
@@ -85,20 +105,57 @@ class DatabaseManager:
         search_pattern = f'%{search_term}%'
         return self.execute_query(query, (search_pattern, search_pattern))
     
-    # Service operations
-    def add_service(self, service_name: str, price: float) -> Optional[int]:
-        """Add a new service"""
-        query = 'INSERT INTO services (service_name, price) VALUES (?, ?)'
-        return self.execute_insert(query, (service_name, price))
+    # Category operations
+    def add_category(self, category_name: str, service_cost: float = None) -> Optional[int]:
+        """Add a new category with optional service cost"""
+        query = 'INSERT INTO categories (category_name, service_cost) VALUES (?, ?)'
+        return self.execute_insert(query, (category_name, service_cost))
     
-    def update_service(self, service_id: int, service_name: str, price: float) -> bool:
+    def update_category(self, category_id: int, category_name: str, service_cost: float = None) -> bool:
+        """Update a category with optional service cost"""
+        query = '''
+            UPDATE categories 
+            SET category_name = ?, service_cost = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        '''
+        return self.execute_update(query, (category_name, service_cost, category_id))
+    
+    def delete_category(self, category_id: int) -> bool:
+        """Delete a category"""
+        query = 'DELETE FROM categories WHERE id = ?'
+        return self.execute_update(query, (category_id,))
+    
+    def get_all_categories(self) -> List[Dict[str, Any]]:
+        """Get all categories"""
+        query = 'SELECT * FROM categories ORDER BY category_name'
+        return self.execute_query(query)
+    
+    def get_category_by_id(self, category_id: int) -> Optional[Dict[str, Any]]:
+        """Get category by ID"""
+        query = 'SELECT * FROM categories WHERE id = ?'
+        results = self.execute_query(query, (category_id,))
+        return results[0] if results else None
+    
+    def get_category_by_name(self, category_name: str) -> Optional[Dict[str, Any]]:
+        """Get category by name"""
+        query = 'SELECT * FROM categories WHERE category_name = ?'
+        results = self.execute_query(query, (category_name,))
+        return results[0] if results else None
+    
+    # Service operations
+    def add_service(self, service_name: str, price: float, category_id: int = None) -> Optional[int]:
+        """Add a new service"""
+        query = 'INSERT INTO services (service_name, price, category_id) VALUES (?, ?, ?)'
+        return self.execute_insert(query, (service_name, price, category_id))
+    
+    def update_service(self, service_id: int, service_name: str, price: float, category_id: int = None) -> bool:
         """Update a service"""
         query = '''
             UPDATE services 
-            SET service_name = ?, price = ?, updated_at = CURRENT_TIMESTAMP
+            SET service_name = ?, price = ?, category_id = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
         '''
-        return self.execute_update(query, (service_name, price, service_id))
+        return self.execute_update(query, (service_name, price, category_id, service_id))
     
     def delete_service(self, service_id: int) -> bool:
         """Delete a service"""
@@ -106,35 +163,59 @@ class DatabaseManager:
         return self.execute_update(query, (service_id,))
     
     def get_all_services(self) -> List[Dict[str, Any]]:
-        """Get all services"""
-        query = 'SELECT * FROM services ORDER BY service_name'
+        """Get all services with category info"""
+        query = '''
+            SELECT s.*, c.category_name 
+            FROM services s
+            LEFT JOIN categories c ON s.category_id = c.id
+            ORDER BY s.service_name
+        '''
         return self.execute_query(query)
+    
+    def get_services_by_category(self, category_id: int) -> List[Dict[str, Any]]:
+        """Get services filtered by category"""
+        query = '''
+            SELECT s.*, c.category_name 
+            FROM services s
+            LEFT JOIN categories c ON s.category_id = c.id
+            WHERE s.category_id = ?
+            ORDER BY s.service_name
+        '''
+        return self.execute_query(query, (category_id,))
     
     def get_service_by_id(self, service_id: int) -> Optional[Dict[str, Any]]:
         """Get service by ID"""
-        query = 'SELECT * FROM services WHERE id = ?'
+        query = '''
+            SELECT s.*, c.category_name 
+            FROM services s
+            LEFT JOIN categories c ON s.category_id = c.id
+            WHERE s.id = ?
+        '''
         results = self.execute_query(query, (service_id,))
         return results[0] if results else None
     
     # Photo frame operations
-    def add_photo_frame(self, frame_name: str, size: str, price: float, quantity: int) -> Optional[int]:
-        """Add a new photo frame"""
+    def add_photo_frame(self, frame_name: str, size: str, price: float, quantity: int,
+                        buying_price: float = 0, selling_price: float = 0) -> Optional[int]:
+        """Add a new photo frame with buying and selling prices"""
         query = '''
-            INSERT INTO photo_frames (frame_name, size, price, quantity)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO photo_frames (frame_name, size, price, quantity, buying_price, selling_price)
+            VALUES (?, ?, ?, ?, ?, ?)
         '''
-        return self.execute_insert(query, (frame_name, size, price, quantity))
+        return self.execute_insert(query, (frame_name, size, price, quantity, buying_price, selling_price))
     
     def update_photo_frame(self, frame_id: int, frame_name: str, size: str, 
-                          price: float, quantity: int) -> bool:
-        """Update a photo frame"""
+                          price: float, quantity: int, buying_price: float = 0,
+                          selling_price: float = 0) -> bool:
+        """Update a photo frame with buying and selling prices"""
         query = '''
             UPDATE photo_frames 
-            SET frame_name = ?, size = ?, price = ?, quantity = ?, 
-                updated_at = CURRENT_TIMESTAMP
+            SET frame_name = ?, size = ?, price = ?, quantity = ?,
+                buying_price = ?, selling_price = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
         '''
-        return self.execute_update(query, (frame_name, size, price, quantity, frame_id))
+        return self.execute_update(query, (frame_name, size, price, quantity, 
+                                          buying_price, selling_price, frame_id))
     
     def delete_photo_frame(self, frame_id: int) -> bool:
         """Delete a photo frame"""
@@ -164,35 +245,42 @@ class DatabaseManager:
     # Invoice operations
     def create_invoice(self, invoice_number: str, customer_id: int, subtotal: float,
                       discount: float, total_amount: float, paid_amount: float,
-                      balance_amount: float, created_by: int) -> Optional[int]:
-        """Create a new invoice"""
+                      balance_amount: float, created_by: int, 
+                      category_service_cost: float = 0, advance_payment: float = 0,
+                      guest_name: str = None) -> Optional[int]:
+        """Create a new invoice with category service cost and advance payment.
+        For guest customers, customer_id is None and guest_name is provided."""
         query = '''
-            INSERT INTO invoices (invoice_number, customer_id, subtotal, discount,
-                                total_amount, paid_amount, balance_amount, created_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO invoices (invoice_number, customer_id, guest_name, subtotal, discount,
+                                category_service_cost, advance_payment, total_amount, 
+                                paid_amount, balance_amount, created_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         '''
-        return self.execute_insert(query, (invoice_number, customer_id, subtotal, 
-                                          discount, total_amount, paid_amount, 
-                                          balance_amount, created_by))
+        return self.execute_insert(query, (invoice_number, customer_id, guest_name, subtotal, 
+                                          discount, category_service_cost, advance_payment,
+                                          total_amount, paid_amount, balance_amount, created_by))
     
     def add_invoice_item(self, invoice_id: int, item_type: str, item_id: int,
                         item_name: str, quantity: int, unit_price: float,
-                        total_price: float) -> Optional[int]:
-        """Add an item to an invoice"""
+                        total_price: float, buying_price: float = 0) -> Optional[int]:
+        """Add an item to an invoice with optional buying price for frames"""
         query = '''
             INSERT INTO invoice_items (invoice_id, item_type, item_id, item_name,
-                                      quantity, unit_price, total_price)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                                      quantity, unit_price, total_price, buying_price)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         '''
         return self.execute_insert(query, (invoice_id, item_type, item_id, item_name,
-                                          quantity, unit_price, total_price))
+                                          quantity, unit_price, total_price, buying_price))
     
     def get_invoice_by_id(self, invoice_id: int) -> Optional[Dict[str, Any]]:
-        """Get invoice with customer details"""
+        """Get invoice with customer details (handles both registered and guest customers)"""
         query = '''
-            SELECT i.*, c.full_name, c.mobile_number, u.full_name as created_by_name
+            SELECT i.*, 
+                   COALESCE(c.full_name, i.guest_name) as full_name, 
+                   c.mobile_number,
+                   u.full_name as created_by_name
             FROM invoices i
-            JOIN customers c ON i.customer_id = c.id
+            LEFT JOIN customers c ON i.customer_id = c.id
             JOIN users u ON i.created_by = u.id
             WHERE i.id = ?
         '''
@@ -324,3 +412,145 @@ class DatabaseManager:
         '''
         search_pattern = f'%{search_term}%'
         return self.execute_query(query, (search_pattern, search_pattern))
+    
+    # ==================== User Permissions Operations ====================
+    
+    def get_user_permissions(self, user_id: int) -> Optional[Dict[str, Any]]:
+        """Get permissions for a user"""
+        query = 'SELECT * FROM user_permissions WHERE user_id = ?'
+        results = self.execute_query(query, (user_id,))
+        return results[0] if results else None
+    
+    def create_default_permissions(self, user_id: int) -> bool:
+        """Create default permissions for a new user (all enabled)"""
+        query = '''
+            INSERT OR IGNORE INTO user_permissions (user_id)
+            VALUES (?)
+        '''
+        return self.execute_update(query, (user_id,))
+    
+    def update_user_permissions(self, user_id: int, permissions: Dict[str, bool]) -> bool:
+        """Update permissions for a user"""
+        # First ensure user has a permissions record
+        self.create_default_permissions(user_id)
+        
+        # Build dynamic update query based on provided permissions
+        valid_permissions = [
+            'can_access_dashboard', 'can_access_billing', 'can_access_customers',
+            'can_access_categories', 'can_access_services', 'can_access_frames',
+            'can_access_bookings', 'can_access_invoices', 'can_access_support',
+            'can_access_user_guide'
+        ]
+        
+        set_clauses = []
+        params = []
+        for perm in valid_permissions:
+            if perm in permissions:
+                set_clauses.append(f"{perm} = ?")
+                params.append(1 if permissions[perm] else 0)
+        
+        if not set_clauses:
+            return True
+        
+        set_clauses.append("updated_at = CURRENT_TIMESTAMP")
+        params.append(user_id)
+        
+        query = f'''
+            UPDATE user_permissions 
+            SET {', '.join(set_clauses)}
+            WHERE user_id = ?
+        '''
+        return self.execute_update(query, tuple(params))
+    
+    def get_all_staff_users(self) -> List[Dict[str, Any]]:
+        """Get all staff users for permission management"""
+        query = '''
+            SELECT id, username, full_name, is_active 
+            FROM users 
+            WHERE role = 'Staff'
+            ORDER BY full_name
+        '''
+        return self.execute_query(query)
+    
+    def get_staff_with_permissions(self) -> List[Dict[str, Any]]:
+        """Get all staff users with their permissions"""
+        query = '''
+            SELECT u.id, u.username, u.full_name, u.is_active,
+                   COALESCE(p.can_access_dashboard, 1) as can_access_dashboard,
+                   COALESCE(p.can_access_billing, 1) as can_access_billing,
+                   COALESCE(p.can_access_customers, 1) as can_access_customers,
+                   COALESCE(p.can_access_categories, 1) as can_access_categories,
+                   COALESCE(p.can_access_services, 1) as can_access_services,
+                   COALESCE(p.can_access_frames, 1) as can_access_frames,
+                   COALESCE(p.can_access_bookings, 1) as can_access_bookings,
+                   COALESCE(p.can_access_invoices, 1) as can_access_invoices,
+                   COALESCE(p.can_access_support, 1) as can_access_support,
+                   COALESCE(p.can_access_user_guide, 1) as can_access_user_guide
+            FROM users u
+            LEFT JOIN user_permissions p ON u.id = p.user_id
+            WHERE u.role = 'Staff'
+            ORDER BY u.full_name
+        '''
+        return self.execute_query(query)
+
+    # ==================== Staff Daily Reports Operations ====================
+    
+    def get_all_users_for_reports(self) -> List[Dict[str, Any]]:
+        """Get all users (staff and admin) for reporting"""
+        query = '''
+            SELECT id, username, full_name, role, is_active 
+            FROM users 
+            ORDER BY role DESC, full_name
+        '''
+        return self.execute_query(query)
+    
+    def get_staff_invoices_by_date(self, user_id: int, date: str) -> List[Dict[str, Any]]:
+        """Get all invoices created by a staff member on a specific date"""
+        query = '''
+            SELECT i.*, c.full_name as customer_name, c.mobile_number as customer_mobile
+            FROM invoices i
+            LEFT JOIN customers c ON i.customer_id = c.id
+            WHERE i.created_by = ? AND DATE(i.created_at) = ?
+            ORDER BY i.created_at ASC
+        '''
+        return self.execute_query(query, (user_id, date))
+    
+    def get_staff_bookings_by_date(self, user_id: int, date: str) -> List[Dict[str, Any]]:
+        """Get all bookings created by a staff member on a specific date"""
+        query = '''
+            SELECT * FROM bookings
+            WHERE created_by = ? AND DATE(created_at) = ?
+            ORDER BY created_at ASC
+        '''
+        return self.execute_query(query, (user_id, date))
+    
+    def get_staff_customers_by_date(self, user_id: int, date: str) -> List[Dict[str, Any]]:
+        """Get all customers added on a specific date
+        Note: Customers table doesn't have created_by, so we return all customers from that date
+        """
+        query = '''
+            SELECT * FROM customers
+            WHERE DATE(created_at) = ?
+            ORDER BY created_at ASC
+        '''
+        return self.execute_query(query, (date,))
+    
+    def get_staff_daily_summary(self, user_id: int, date: str) -> Dict[str, Any]:
+        """Get a summary of staff daily work"""
+        invoices = self.get_staff_invoices_by_date(user_id, date)
+        bookings = self.get_staff_bookings_by_date(user_id, date)
+        
+        total_invoice_amount = sum(inv.get('total_amount', 0) for inv in invoices)
+        total_paid = sum(inv.get('paid_amount', 0) for inv in invoices)
+        total_booking_amount = sum(b.get('full_amount', 0) for b in bookings)
+        total_advance = sum(b.get('advance_payment', 0) for b in bookings)
+        
+        return {
+            'invoice_count': len(invoices),
+            'total_invoice_amount': total_invoice_amount,
+            'total_paid': total_paid,
+            'booking_count': len(bookings),
+            'total_booking_amount': total_booking_amount,
+            'total_advance': total_advance
+        }
+

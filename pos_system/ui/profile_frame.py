@@ -7,7 +7,7 @@ import os
 
 
 class ProfileFrame(ctk.CTkFrame):
-    """User profile and password change page with profile picture upload"""
+    """User profile and password change page with full-width layout"""
     
     def __init__(self, parent, auth_manager, db_manager, main_app=None):
         super().__init__(parent, fg_color="transparent")
@@ -21,7 +21,7 @@ class ProfileFrame(ctk.CTkFrame):
         self.load_profile()
     
     def create_widgets(self):
-        """Create profile widgets"""
+        """Create profile widgets with full-width layout"""
         
         # Header
         header = ctk.CTkFrame(self, fg_color="transparent")
@@ -34,19 +34,19 @@ class ProfileFrame(ctk.CTkFrame):
         )
         title.pack(side="left")
         
-        # Scrollable main container
-        main = ctk.CTkScrollableFrame(self, fg_color="transparent")
-        main.pack(fill="both", expand=True, padx=30, pady=10)
+        # Scrollable main container - full width
+        main_scroll = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        main_scroll.pack(fill="both", expand=True, padx=30, pady=10)
         
-        # Profile Card
-        profile_card = ctk.CTkFrame(main, fg_color="#1e1e3f", corner_radius=15)
+        # Profile Card - Full width
+        profile_card = ctk.CTkFrame(main_scroll, fg_color="#1e1e3f", corner_radius=15)
         profile_card.pack(fill="x", pady=10)
         
         # Avatar section
         avatar_frame = ctk.CTkFrame(profile_card, fg_color="transparent")
         avatar_frame.pack(fill="x", padx=30, pady=30)
         
-        # Profile picture container
+        # Profile picture container - circular avatar only
         self.avatar_container = ctk.CTkFrame(avatar_frame, fg_color="#252545", width=120, height=120, corner_radius=60)
         self.avatar_container.pack()
         self.avatar_container.pack_propagate(False)
@@ -69,6 +69,7 @@ class ProfileFrame(ctk.CTkFrame):
             fg_color="#00d4ff",
             text_color="#1a1a2e",
             hover_color="#00a8cc",
+            corner_radius=8,
             command=self.upload_profile_picture
         )
         upload_btn.pack(pady=(15, 5))
@@ -83,6 +84,7 @@ class ProfileFrame(ctk.CTkFrame):
             fg_color="#ff6b6b",
             text_color="white",
             hover_color="#e55555",
+            corner_radius=8,
             command=self.remove_profile_picture
         )
         remove_btn.pack(pady=(0, 10))
@@ -102,16 +104,17 @@ class ProfileFrame(ctk.CTkFrame):
         )
         self.role_label.pack()
         
-        # Profile details
+        # Profile details - full width card section
         details_frame = ctk.CTkFrame(profile_card, fg_color="#252545", corner_radius=10)
         details_frame.pack(fill="x", padx=30, pady=(0, 30))
         
         self.username_detail = self.create_detail_row(details_frame, "Username:", "")
         self.role_detail = self.create_detail_row(details_frame, "Role:", "")
         self.status_detail = self.create_detail_row(details_frame, "Status:", "Active")
+        self.last_login_detail = self.create_detail_row(details_frame, "Last Login:", "")
         
-        # Change Password Section
-        password_section = ctk.CTkFrame(main, fg_color="#1e1e3f", corner_radius=15)
+        # Change Password Section - Full width
+        password_section = ctk.CTkFrame(main_scroll, fg_color="#1e1e3f", corner_radius=15)
         password_section.pack(fill="x", pady=10)
         
         ctk.CTkLabel(
@@ -135,7 +138,8 @@ class ProfileFrame(ctk.CTkFrame):
             height=45,
             font=ctk.CTkFont(size=13),
             show="●",
-            placeholder_text="Enter current password"
+            placeholder_text="Enter current password",
+            corner_radius=8
         )
         self.current_password.pack(fill="x", pady=(0, 15))
         
@@ -151,7 +155,8 @@ class ProfileFrame(ctk.CTkFrame):
             height=45,
             font=ctk.CTkFont(size=13),
             show="●",
-            placeholder_text="Enter new password (min 6 characters)"
+            placeholder_text="Enter new password (min 6 characters)",
+            corner_radius=8
         )
         self.new_password.pack(fill="x", pady=(0, 15))
         
@@ -167,7 +172,8 @@ class ProfileFrame(ctk.CTkFrame):
             height=45,
             font=ctk.CTkFont(size=13),
             show="●",
-            placeholder_text="Confirm new password"
+            placeholder_text="Confirm new password",
+            corner_radius=8
         )
         self.confirm_password.pack(fill="x", pady=(0, 20))
         
@@ -190,11 +196,12 @@ class ProfileFrame(ctk.CTkFrame):
             fg_color="#00d4ff",
             text_color="#1a1a2e",
             hover_color="#00a8cc",
+            corner_radius=10,
             command=self.change_password
         ).pack(anchor="w")
         
-        # Account Activity Section
-        activity_section = ctk.CTkFrame(main, fg_color="#1e1e3f", corner_radius=15)
+        # Account Activity Section - Full width
+        activity_section = ctk.CTkFrame(main_scroll, fg_color="#1e1e3f", corner_radius=15)
         activity_section.pack(fill="x", pady=10)
         
         ctk.CTkLabel(
@@ -208,13 +215,11 @@ class ProfileFrame(ctk.CTkFrame):
         
         info_text = ctk.CTkLabel(
             activity_content,
-            text="""
-• Your account is used to access the POS system
+            text="""• Your account is used to access the POS system
 • All your actions are logged for security
 • Keep your password secure and don't share it
 • Contact administrator if you need to reset your password
-• Log out when leaving the workstation
-            """,
+• Log out when leaving the workstation""",
             font=ctk.CTkFont(size=13),
             text_color="#aaaaaa",
             justify="left"
@@ -255,17 +260,41 @@ class ProfileFrame(ctk.CTkFrame):
             self.role_detail.configure(text=user['role'])
             self.status_detail.configure(text="Active")
             
+            # Set last login
+            last_login = user.get('last_login')
+            if last_login:
+                self.last_login_detail.configure(text=last_login)
+            else:
+                self.last_login_detail.configure(text="First login")
+            
             # Load profile picture
             self.load_profile_picture(user['id'])
     
     def load_profile_picture(self, user_id: int):
-        """Load and display profile picture"""
+        """Load and display profile picture with circular mask"""
         try:
             profile_path = self.user_service.get_profile_picture(user_id)
             if profile_path and os.path.exists(profile_path):
                 img = Image.open(profile_path)
+                # Make square crop from center
+                min_dim = min(img.size)
+                left = (img.width - min_dim) // 2
+                top = (img.height - min_dim) // 2
+                img = img.crop((left, top, left + min_dim, top + min_dim))
                 img = img.resize((100, 100), Image.Resampling.LANCZOS)
-                self.profile_image = ctk.CTkImage(light_image=img, dark_image=img, size=(100, 100))
+                
+                # Create circular mask
+                from PIL import ImageDraw
+                mask = Image.new('L', (100, 100), 0)
+                draw = ImageDraw.Draw(mask)
+                draw.ellipse((0, 0, 100, 100), fill=255)
+                
+                # Apply mask
+                output = Image.new('RGBA', (100, 100), (0, 0, 0, 0))
+                img = img.convert('RGBA')
+                output.paste(img, (0, 0), mask)
+                
+                self.profile_image = ctk.CTkImage(light_image=output, dark_image=output, size=(100, 100))
                 self.avatar_label.configure(image=self.profile_image, text="")
             else:
                 self.avatar_label.configure(image=None, text="👤", font=ctk.CTkFont(size=50))
@@ -328,7 +357,18 @@ class ProfileFrame(ctk.CTkFrame):
         if not user:
             return
         
-        def do_remove():
+        # Show confirmation dialog
+        confirmed = Toast.confirm(
+            self, 
+            "Remove Picture", 
+            "Remove your profile picture?", 
+            "Yes, Remove", 
+            "Cancel", 
+            "🗑️", 
+            "#e74c3c"
+        )
+        
+        if confirmed:
             # Get current picture path
             current_path = self.user_service.get_profile_picture(user['id'])
             
@@ -348,10 +388,9 @@ class ProfileFrame(ctk.CTkFrame):
                 if self.main_app:
                     self.main_app.update_profile_display()
                 
-                Toast.success(self, "Profile picture removed")
-        
-        Toast.confirm(self, "Remove Picture", "Remove your profile picture?", 
-                     "Yes, Remove", "Cancel", "🗑️", "#e74c3c", do_remove)
+                Toast.success(self, "Profile picture removed successfully!")
+            else:
+                Toast.error(self, "Failed to remove profile picture")
     
     def change_password(self):
         """Handle password change"""
