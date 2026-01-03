@@ -178,26 +178,54 @@ class CategoryManagementFrame(BaseFrame):
         table_frame = ctk.CTkFrame(right_panel, fg_color="#252545", corner_radius=10)
         table_frame.pack(fill="both", expand=True, padx=15, pady=(0, 15))
         
+        # Table header
+        table_header = ctk.CTkFrame(table_frame, fg_color="#1e1e3f", corner_radius=8, height=45)
+        table_header.pack(fill="x", padx=5, pady=5)
+        table_header.pack_propagate(False)
+        
+        ctk.CTkLabel(
+            table_header,
+            text="📋 Category Records",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color="#00d4ff"
+        ).pack(side="left", padx=15, pady=10)
+        
+        self.record_count_label = ctk.CTkLabel(
+            table_header,
+            text="0 records",
+            font=ctk.CTkFont(size=11),
+            text_color="#888888"
+        )
+        self.record_count_label.pack(side="right", padx=15, pady=10)
+        
+        # Table container
+        table_container = ctk.CTkFrame(table_frame, fg_color="#1a1a2e", corner_radius=8)
+        table_container.pack(fill="both", expand=True, padx=5, pady=(0, 5))
+        
         # Create Treeview
         columns = ("ID", "Category Name", "Service Cost", "Created At")
-        self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=15)
+        self.tree = ttk.Treeview(table_container, columns=columns, show="headings", height=15)
         
-        # Configure columns
-        self.tree.heading("ID", text="ID")
-        self.tree.heading("Category Name", text="Category Name")
-        self.tree.heading("Service Cost", text="Service Cost (LKR)")
-        self.tree.heading("Created At", text="Created At")
+        # Configure columns with icons
+        self.tree.heading("ID", text="🔢 ID")
+        self.tree.heading("Category Name", text="📁 Category Name")
+        self.tree.heading("Service Cost", text="💰 Service Cost (LKR)")
+        self.tree.heading("Created At", text="📅 Created At")
         
         self.tree.column("ID", width=60, anchor="center")
         self.tree.column("Category Name", width=200)
-        self.tree.column("Service Cost", width=120, anchor="e")
+        self.tree.column("Service Cost", width=130, anchor="e")
         self.tree.column("Created At", width=180)
         
+        # Configure row tags
+        self.tree.tag_configure('oddrow', background='#1e1e3f', foreground='#e0e0e0')
+        self.tree.tag_configure('evenrow', background='#252545', foreground='#e0e0e0')
+        
         # Scrollbar
-        scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
+        scrollbar = ttk.Scrollbar(table_container, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=scrollbar.set)
         
-        self.tree.pack(side="left", fill="both", expand=True, padx=10, pady=10)
+        self.tree.pack(side="left", fill="both", expand=True, padx=(5, 0), pady=5)
         scrollbar.pack(side="right", fill="y", pady=10)
         
         # Bind selection
@@ -330,15 +358,19 @@ class CategoryManagementFrame(BaseFrame):
         
         categories = self.db_manager.get_all_categories()
         
-        for category in categories:
+        for i, category in enumerate(categories):
             service_cost = category.get('service_cost')
             cost_display = f"{service_cost:.2f}" if service_cost is not None else "-"
+            tag = 'evenrow' if i % 2 == 0 else 'oddrow'
             self.tree.insert("", "end", values=(
                 category['id'],
                 category['category_name'],
                 cost_display,
                 category['created_at']
-            ))
+            ), tags=(tag,))
+        
+        # Update record count
+        self.record_count_label.configure(text=f"{len(categories)} records")
     
     def search_categories(self):
         """Search categories by name"""
@@ -350,16 +382,24 @@ class CategoryManagementFrame(BaseFrame):
         
         categories = self.db_manager.get_all_categories()
         
+        filtered = []
         for category in categories:
             if not search_term or search_term in category['category_name'].lower():
-                service_cost = category.get('service_cost')
-                cost_display = f"{service_cost:.2f}" if service_cost is not None else "-"
-                self.tree.insert("", "end", values=(
-                    category['id'],
-                    category['category_name'],
-                    cost_display,
-                    category['created_at']
-                ))
+                filtered.append(category)
+        
+        for i, category in enumerate(filtered):
+            service_cost = category.get('service_cost')
+            cost_display = f"{service_cost:.2f}" if service_cost is not None else "-"
+            tag = 'evenrow' if i % 2 == 0 else 'oddrow'
+            self.tree.insert("", "end", values=(
+                category['id'],
+                category['category_name'],
+                cost_display,
+                category['created_at']
+            ), tags=(tag,))
+        
+        # Update record count
+        self.record_count_label.configure(text=f"{len(filtered)} records")
     
     def on_select(self, event):
         """Handle row selection"""

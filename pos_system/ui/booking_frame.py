@@ -266,7 +266,7 @@ class BookingManagementFrame(BaseFrame):
         search_frame = ctk.CTkFrame(right_panel, fg_color="#252545", corner_radius=10)
         search_frame.pack(fill="x", padx=15, pady=15)
         
-        ctk.CTkLabel(search_frame, text="Search:", font=ctk.CTkFont(size=13, weight="bold")).pack(side="left", padx=5)
+        ctk.CTkLabel(search_frame, text="🔍 Search:", font=ctk.CTkFont(size=13, weight="bold")).pack(side="left", padx=5)
         self.search_entry = ctk.CTkEntry(search_frame, width=200, height=35)
         self.search_entry.pack(side="left", padx=5)
         self.search_entry.bind("<KeyRelease>", lambda e: self.search_bookings())
@@ -279,36 +279,63 @@ class BookingManagementFrame(BaseFrame):
             height=35
         ).pack(side="left", padx=5)
         
+        # Table header
+        table_header = ctk.CTkFrame(right_panel, fg_color="#252545", corner_radius=10, height=45)
+        table_header.pack(fill="x", padx=15, pady=(0, 5))
+        table_header.pack_propagate(False)
+        
+        ctk.CTkLabel(
+            table_header,
+            text="📅 Booking Records",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color="#00d4ff"
+        ).pack(side="left", padx=15, pady=10)
+        
+        self.record_count_label = ctk.CTkLabel(
+            table_header,
+            text="0 records",
+            font=ctk.CTkFont(size=11),
+            text_color="#888888"
+        )
+        self.record_count_label.pack(side="right", padx=15, pady=10)
+        
         # Table
-        table_frame = ctk.CTkFrame(right_panel, fg_color="#252545", corner_radius=10)
+        table_frame = ctk.CTkFrame(right_panel, fg_color="#1a1a2e", corner_radius=10)
         table_frame.pack(fill="both", expand=True, padx=15, pady=(0, 15))
         
         columns = ("ID", "Customer", "Mobile", "Category", "Service", "Amount", "Date", "Status")
         self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=20)
         
-        self.tree.heading("ID", text="ID")
-        self.tree.heading("Customer", text="Customer")
-        self.tree.heading("Mobile", text="Mobile")
-        self.tree.heading("Category", text="Category")
-        self.tree.heading("Service", text="Service")
-        self.tree.heading("Amount", text="Amount")
-        self.tree.heading("Date", text="Date")
-        self.tree.heading("Status", text="Status")
+        self.tree.heading("ID", text="🔢 ID")
+        self.tree.heading("Customer", text="👤 Customer")
+        self.tree.heading("Mobile", text="📱 Mobile")
+        self.tree.heading("Category", text="📁 Category")
+        self.tree.heading("Service", text="🛠️ Service")
+        self.tree.heading("Amount", text="💰 Amount")
+        self.tree.heading("Date", text="📅 Date")
+        self.tree.heading("Status", text="📊 Status")
         
-        self.tree.column("ID", width=40, anchor="center")
+        self.tree.column("ID", width=50, anchor="center")
         self.tree.column("Customer", width=100)
-        self.tree.column("Mobile", width=90)
+        self.tree.column("Mobile", width=90, anchor="center")
         self.tree.column("Category", width=100)
         self.tree.column("Service", width=100)
         self.tree.column("Amount", width=80, anchor="e")
-        self.tree.column("Date", width=80)
-        self.tree.column("Status", width=70, anchor="center")
+        self.tree.column("Date", width=90, anchor="center")
+        self.tree.column("Status", width=80, anchor="center")
+        
+        # Configure row tags
+        self.tree.tag_configure('oddrow', background='#1e1e3f', foreground='#e0e0e0')
+        self.tree.tag_configure('evenrow', background='#252545', foreground='#e0e0e0')
+        self.tree.tag_configure('pending', background='#3a2e1e', foreground='#ffd93d')
+        self.tree.tag_configure('completed', background='#1e3a2f', foreground='#00ff88')
+        self.tree.tag_configure('cancelled', background='#3a1e1e', foreground='#ff6b6b')
         
         scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=scrollbar.set)
         
-        self.tree.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
+        self.tree.pack(side="left", fill="both", expand=True, padx=(5, 0), pady=5)
+        scrollbar.pack(side="right", fill="y", pady=5, padx=(0, 5))
         
         self.tree.bind("<<TreeviewSelect>>", self.on_select)
     
@@ -506,12 +533,16 @@ class BookingManagementFrame(BaseFrame):
         
         bookings = self.db_manager.get_all_bookings()
         
-        for booking in bookings:
-            tags = ()
-            if booking['status'] == 'Completed':
-                tags = ('completed',)
-            elif booking['status'] == 'Cancelled':
-                tags = ('cancelled',)
+        for i, booking in enumerate(bookings):
+            status = booking['status']
+            if status == 'Completed':
+                tag = 'completed'
+            elif status == 'Cancelled':
+                tag = 'cancelled'
+            elif status == 'Pending':
+                tag = 'pending'
+            else:
+                tag = 'evenrow' if i % 2 == 0 else 'oddrow'
             
             # Split photoshoot_category into category and service
             photoshoot_cat = booking['photoshoot_category']
@@ -532,10 +563,10 @@ class BookingManagementFrame(BaseFrame):
                 f"{booking['full_amount']:.2f}",
                 booking['booking_date'],
                 booking['status']
-            ), tags=tags)
+            ), tags=(tag,))
         
-        self.tree.tag_configure('completed', background='#006400')
-        self.tree.tag_configure('cancelled', background='#8B0000')
+        # Update record count
+        self.record_count_label.configure(text=f"{len(bookings)} records")
     
     def search_bookings(self):
         """Search bookings"""
@@ -550,12 +581,16 @@ class BookingManagementFrame(BaseFrame):
         
         bookings = self.db_manager.search_bookings(search_term)
         
-        for booking in bookings:
-            tags = ()
-            if booking['status'] == 'Completed':
-                tags = ('completed',)
-            elif booking['status'] == 'Cancelled':
-                tags = ('cancelled',)
+        for i, booking in enumerate(bookings):
+            status = booking['status']
+            if status == 'Completed':
+                tag = 'completed'
+            elif status == 'Cancelled':
+                tag = 'cancelled'
+            elif status == 'Pending':
+                tag = 'pending'
+            else:
+                tag = 'evenrow' if i % 2 == 0 else 'oddrow'
             
             # Split photoshoot_category into category and service
             photoshoot_cat = booking['photoshoot_category']
@@ -576,7 +611,10 @@ class BookingManagementFrame(BaseFrame):
                 f"{booking['full_amount']:.2f}",
                 booking['booking_date'],
                 booking['status']
-            ), tags=tags)
+            ), tags=(tag,))
+        
+        # Update record count
+        self.record_count_label.configure(text=f"{len(bookings)} records")
     
     def on_select(self, event):
         """Handle row selection"""

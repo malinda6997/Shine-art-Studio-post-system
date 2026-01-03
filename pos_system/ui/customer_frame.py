@@ -116,27 +116,56 @@ class CustomerManagementFrame(BaseFrame):
         table_frame = ctk.CTkFrame(self, fg_color="#1e1e3f", corner_radius=15)
         table_frame.pack(fill="both", expand=True, padx=20, pady=(0, 20))
         
+        # Table header
+        table_header = ctk.CTkFrame(table_frame, fg_color="#252545", corner_radius=10, height=50)
+        table_header.pack(fill="x", padx=10, pady=(10, 5))
+        table_header.pack_propagate(False)
+        
+        ctk.CTkLabel(
+            table_header,
+            text="📋 Customer Records",
+            font=ctk.CTkFont(size=14, weight="bold"),
+            text_color="#00d4ff"
+        ).pack(side="left", padx=15, pady=10)
+        
+        # Record count label
+        self.record_count_label = ctk.CTkLabel(
+            table_header,
+            text="0 records",
+            font=ctk.CTkFont(size=12),
+            text_color="#888888"
+        )
+        self.record_count_label.pack(side="right", padx=15, pady=10)
+        
+        # Table container with modern styling
+        table_container = ctk.CTkFrame(table_frame, fg_color="#1a1a2e", corner_radius=10)
+        table_container.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        
         # Create Treeview
         columns = ("ID", "Full Name", "Mobile Number", "Created At")
-        self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=15)
+        self.tree = ttk.Treeview(table_container, columns=columns, show="headings", height=15)
         
-        # Configure columns
-        self.tree.heading("ID", text="ID")
-        self.tree.heading("Full Name", text="Full Name")
-        self.tree.heading("Mobile Number", text="Mobile Number")
-        self.tree.heading("Created At", text="Created At")
+        # Configure columns with modern styling
+        self.tree.heading("ID", text="🔢 ID")
+        self.tree.heading("Full Name", text="👤 Full Name")
+        self.tree.heading("Mobile Number", text="📱 Mobile Number")
+        self.tree.heading("Created At", text="📅 Created At")
         
-        self.tree.column("ID", width=60, anchor="center")
+        self.tree.column("ID", width=70, anchor="center")
         self.tree.column("Full Name", width=250)
-        self.tree.column("Mobile Number", width=150)
+        self.tree.column("Mobile Number", width=150, anchor="center")
         self.tree.column("Created At", width=200)
         
+        # Configure row tags for alternating colors
+        self.tree.tag_configure('oddrow', background='#1e1e3f', foreground='#e0e0e0')
+        self.tree.tag_configure('evenrow', background='#252545', foreground='#e0e0e0')
+        
         # Scrollbar
-        scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
+        scrollbar = ttk.Scrollbar(table_container, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=scrollbar.set)
         
-        self.tree.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
+        self.tree.pack(side="left", fill="both", expand=True, padx=(5, 0), pady=5)
+        scrollbar.pack(side="right", fill="y", pady=5, padx=(0, 5))
         
         # Bind selection
         self.tree.bind("<<TreeviewSelect>>", self.on_select)
@@ -255,13 +284,17 @@ class CustomerManagementFrame(BaseFrame):
         
         customers = self.db_manager.get_all_customers()
         
-        for customer in customers:
+        for i, customer in enumerate(customers):
+            tag = 'evenrow' if i % 2 == 0 else 'oddrow'
             self.tree.insert("", "end", values=(
                 customer['id'],
                 customer['full_name'],
                 customer['mobile_number'],
                 customer['created_at']
-            ))
+            ), tags=(tag,))
+        
+        # Update record count
+        self.record_count_label.configure(text=f"{len(customers)} records")
     
     def search_customers(self):
         """Search customers"""
@@ -277,13 +310,17 @@ class CustomerManagementFrame(BaseFrame):
         
         customers = self.db_manager.search_customers(search_term)
         
-        for customer in customers:
+        for i, customer in enumerate(customers):
+            tag = 'evenrow' if i % 2 == 0 else 'oddrow'
             self.tree.insert("", "end", values=(
                 customer['id'],
                 customer['full_name'],
                 customer['mobile_number'],
                 customer['created_at']
-            ))
+            ), tags=(tag,))
+        
+        # Update record count
+        self.record_count_label.configure(text=f"{len(customers)} records")
     
     def on_select(self, event):
         """Handle row selection"""

@@ -39,25 +39,73 @@ class MainApplication(ctk.CTk):
         # Set application window icon
         self._set_window_icon()
         
-        # Configure ttk styles for tables with larger font
+        # Configure ttk styles for modern tables
         style = ttk.Style()
         style.theme_use("clam")
+        
+        # Modern table styling with gradient-like effect
         style.configure("Treeview",
-            background="#1e1e3f",
-            foreground="white",
-            fieldbackground="#1e1e3f",
+            background="#1a1a2e",
+            foreground="#e0e0e0",
+            fieldbackground="#1a1a2e",
             font=("Segoe UI", 12),
-            rowheight=32
+            rowheight=45,
+            borderwidth=0
         )
+        
+        # Modern header styling with accent color
         style.configure("Treeview.Heading",
             background="#252545",
-            foreground="white",
-            font=("Segoe UI", 12, "bold")
+            foreground="#00d4ff",
+            font=("Segoe UI", 12, "bold"),
+            borderwidth=0,
+            relief="flat",
+            padding=(10, 8)
         )
+        
+        # Selection and hover effects
         style.map("Treeview",
-            background=[("selected", "#00d4ff")],
-            foreground=[("selected", "#1a1a2e")]
+            background=[
+                ("selected", "#00d4ff"),
+                ("!selected", "#1a1a2e")
+            ],
+            foreground=[
+                ("selected", "#1a1a2e"),
+                ("!selected", "#e0e0e0")
+            ]
         )
+        
+        # Header hover effect
+        style.map("Treeview.Heading",
+            background=[
+                ("active", "#3d3d7a"),
+                ("!active", "#252545")
+            ],
+            foreground=[
+                ("active", "#00ff88"),
+                ("!active", "#00d4ff")
+            ]
+        )
+        
+        # Modern scrollbar styling
+        style.configure("Vertical.TScrollbar",
+            background="#2d2d5a",
+            troughcolor="#1a1a2e",
+            borderwidth=0,
+            arrowsize=0,
+            width=12
+        )
+        
+        style.map("Vertical.TScrollbar",
+            background=[
+                ("active", "#00d4ff"),
+                ("!active", "#3d3d7a")
+            ]
+        )
+        
+        # Configure alternating row colors using tags (applied in frames)
+        style.configure("oddrow.Treeview", background="#1e1e3f")
+        style.configure("evenrow.Treeview", background="#252545")
         
         # Hide main window initially
         self.withdraw()

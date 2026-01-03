@@ -198,14 +198,38 @@ class UsersManagementFrame(ctk.CTkFrame):
         table_frame = ctk.CTkFrame(right, fg_color="transparent")
         table_frame.pack(fill="both", expand=True, padx=20, pady=(0, 20))
         
-        columns = ("ID", "Full Name", "Username", "Role", "Status")
-        self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=18)
+        # Table header with record count
+        table_header = ctk.CTkFrame(table_frame, fg_color="#252545", corner_radius=10, height=45)
+        table_header.pack(fill="x", pady=(0, 5))
+        table_header.pack_propagate(False)
         
-        self.tree.heading("ID", text="ID")
-        self.tree.heading("Full Name", text="Full Name")
-        self.tree.heading("Username", text="Username")
-        self.tree.heading("Role", text="Role")
-        self.tree.heading("Status", text="Status")
+        ctk.CTkLabel(
+            table_header,
+            text="👥 User Accounts",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color="#00d4ff"
+        ).pack(side="left", padx=15, pady=10)
+        
+        self.record_count_label = ctk.CTkLabel(
+            table_header,
+            text="0 users",
+            font=ctk.CTkFont(size=11),
+            text_color="#888888"
+        )
+        self.record_count_label.pack(side="right", padx=15, pady=10)
+        
+        # Table container
+        table_container = ctk.CTkFrame(table_frame, fg_color="#1a1a2e", corner_radius=10)
+        table_container.pack(fill="both", expand=True)
+        
+        columns = ("ID", "Full Name", "Username", "Role", "Status")
+        self.tree = ttk.Treeview(table_container, columns=columns, show="headings", height=18)
+        
+        self.tree.heading("ID", text="🔢 ID")
+        self.tree.heading("Full Name", text="👤 Full Name")
+        self.tree.heading("Username", text="🔑 Username")
+        self.tree.heading("Role", text="🎭 Role")
+        self.tree.heading("Status", text="📊 Status")
         
         self.tree.column("ID", width=50, anchor="center")
         self.tree.column("Full Name", width=180)
@@ -213,11 +237,17 @@ class UsersManagementFrame(ctk.CTkFrame):
         self.tree.column("Role", width=80, anchor="center")
         self.tree.column("Status", width=80, anchor="center")
         
-        scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
+        # Configure row tags
+        self.tree.tag_configure('oddrow', background='#1e1e3f', foreground='#e0e0e0')
+        self.tree.tag_configure('evenrow', background='#252545', foreground='#e0e0e0')
+        self.tree.tag_configure('admin', background='#1e3a2f', foreground='#00ff88')
+        self.tree.tag_configure('disabled', background='#3a1e1e', foreground='#ff6b6b')
+        
+        scrollbar = ttk.Scrollbar(table_container, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=scrollbar.set)
         
-        self.tree.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
+        self.tree.pack(side="left", fill="both", expand=True, padx=(5, 0), pady=5)
+        scrollbar.pack(side="right", fill="y", pady=5, padx=(0, 5))
         
         self.tree.bind("<<TreeviewSelect>>", self.on_select)
     
@@ -362,15 +392,27 @@ class UsersManagementFrame(ctk.CTkFrame):
         
         users = self.user_service.get_all_users()
         
-        for user in users:
+        for i, user in enumerate(users):
             status = "Active" if user['is_active'] else "Disabled"
+            
+            # Tag based on role and status
+            if not user['is_active']:
+                tag = 'disabled'
+            elif user['role'] == 'Admin':
+                tag = 'admin'
+            else:
+                tag = 'evenrow' if i % 2 == 0 else 'oddrow'
+            
             self.tree.insert("", "end", values=(
                 user['id'],
                 user['full_name'],
                 user['username'],
                 user['role'],
                 status
-            ))
+            ), tags=(tag,))
+        
+        # Update record count
+        self.record_count_label.configure(text=f"{len(users)} users")
     
     def on_select(self, event):
         """Handle user selection"""

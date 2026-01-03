@@ -71,30 +71,59 @@ class InvoiceHistoryFrame(BaseFrame):
         table_frame = ctk.CTkFrame(self, fg_color="#1e1e3f", corner_radius=15)
         table_frame.pack(fill="both", expand=True, padx=20, pady=(0, 20))
         
-        columns = ("Invoice #", "Date", "Customer", "Mobile", "Total", "Paid", "Balance")
-        self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=18)
+        # Table header
+        table_header = ctk.CTkFrame(table_frame, fg_color="#252545", corner_radius=10, height=50)
+        table_header.pack(fill="x", padx=10, pady=(10, 5))
+        table_header.pack_propagate(False)
         
-        self.tree.heading("Invoice #", text="Invoice #")
-        self.tree.heading("Date", text="Date")
-        self.tree.heading("Customer", text="Customer")
-        self.tree.heading("Mobile", text="Mobile")
-        self.tree.heading("Total", text="Total (LKR)")
-        self.tree.heading("Paid", text="Paid (LKR)")
-        self.tree.heading("Balance", text="Balance (LKR)")
+        ctk.CTkLabel(
+            table_header,
+            text="🧾 Invoice Records",
+            font=ctk.CTkFont(size=14, weight="bold"),
+            text_color="#00d4ff"
+        ).pack(side="left", padx=15, pady=10)
+        
+        self.record_count_label = ctk.CTkLabel(
+            table_header,
+            text="0 records",
+            font=ctk.CTkFont(size=12),
+            text_color="#888888"
+        )
+        self.record_count_label.pack(side="right", padx=15, pady=10)
+        
+        # Table container
+        table_container = ctk.CTkFrame(table_frame, fg_color="#1a1a2e", corner_radius=10)
+        table_container.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        
+        columns = ("Invoice #", "Date", "Customer", "Mobile", "Total", "Paid", "Balance")
+        self.tree = ttk.Treeview(table_container, columns=columns, show="headings", height=18)
+        
+        self.tree.heading("Invoice #", text="🔢 Invoice #")
+        self.tree.heading("Date", text="📅 Date")
+        self.tree.heading("Customer", text="👤 Customer")
+        self.tree.heading("Mobile", text="📱 Mobile")
+        self.tree.heading("Total", text="💰 Total (LKR)")
+        self.tree.heading("Paid", text="✅ Paid (LKR)")
+        self.tree.heading("Balance", text="⏳ Balance (LKR)")
         
         self.tree.column("Invoice #", width=120, anchor="center")
         self.tree.column("Date", width=150)
         self.tree.column("Customer", width=200)
-        self.tree.column("Mobile", width=120)
+        self.tree.column("Mobile", width=120, anchor="center")
         self.tree.column("Total", width=120, anchor="e")
         self.tree.column("Paid", width=120, anchor="e")
         self.tree.column("Balance", width=120, anchor="e")
         
-        scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
+        # Configure row tags
+        self.tree.tag_configure('oddrow', background='#1e1e3f', foreground='#e0e0e0')
+        self.tree.tag_configure('evenrow', background='#252545', foreground='#e0e0e0')
+        self.tree.tag_configure('hasbalance', background='#3a2e1e', foreground='#ffd93d')
+        
+        scrollbar = ttk.Scrollbar(table_container, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=scrollbar.set)
         
-        self.tree.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
+        self.tree.pack(side="left", fill="both", expand=True, padx=(5, 0), pady=5)
+        scrollbar.pack(side="right", fill="y", pady=5, padx=(0, 5))
         
         # Double-click to view
         self.tree.bind("<Double-Button-1>", lambda e: self.view_invoice_details())
@@ -106,7 +135,14 @@ class InvoiceHistoryFrame(BaseFrame):
         
         invoices = self.db_manager.get_all_invoices(limit=200)
         
-        for invoice in invoices:
+        for i, invoice in enumerate(invoices):
+            balance = invoice['balance_amount']
+            # Highlight invoices with pending balance
+            if balance > 0:
+                tag = 'hasbalance'
+            else:
+                tag = 'evenrow' if i % 2 == 0 else 'oddrow'
+            
             self.tree.insert("", "end", values=(
                 invoice['invoice_number'],
                 invoice['created_at'],
@@ -115,7 +151,10 @@ class InvoiceHistoryFrame(BaseFrame):
                 f"{invoice['total_amount']:.2f}",
                 f"{invoice['paid_amount']:.2f}",
                 f"{invoice['balance_amount']:.2f}"
-            ))
+            ), tags=(tag,))
+        
+        # Update record count
+        self.record_count_label.configure(text=f"{len(invoices)} records")
     
     def search_invoices(self):
         """Search invoices"""
@@ -130,7 +169,13 @@ class InvoiceHistoryFrame(BaseFrame):
         
         invoices = self.db_manager.search_invoices(search_term)
         
-        for invoice in invoices:
+        for i, invoice in enumerate(invoices):
+            balance = invoice['balance_amount']
+            if balance > 0:
+                tag = 'hasbalance'
+            else:
+                tag = 'evenrow' if i % 2 == 0 else 'oddrow'
+            
             self.tree.insert("", "end", values=(
                 invoice['invoice_number'],
                 invoice['created_at'],
@@ -139,7 +184,10 @@ class InvoiceHistoryFrame(BaseFrame):
                 f"{invoice['total_amount']:.2f}",
                 f"{invoice['paid_amount']:.2f}",
                 f"{invoice['balance_amount']:.2f}"
-            ))
+            ), tags=(tag,))
+        
+        # Update record count
+        self.record_count_label.configure(text=f"{len(invoices)} records")
     
     def view_invoice_details(self):
         """View detailed invoice information"""

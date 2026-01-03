@@ -133,22 +133,46 @@ class FrameManagementFrame(BaseFrame):
         table_frame = ctk.CTkFrame(self, fg_color="#1e1e3f", corner_radius=15)
         table_frame.pack(fill="both", expand=True, padx=20, pady=(0, 20))
         
+        # Table header
+        table_header = ctk.CTkFrame(table_frame, fg_color="#252545", corner_radius=10, height=50)
+        table_header.pack(fill="x", padx=10, pady=(10, 5))
+        table_header.pack_propagate(False)
+        
+        ctk.CTkLabel(
+            table_header,
+            text="🖼️ Frame Inventory",
+            font=ctk.CTkFont(size=14, weight="bold"),
+            text_color="#00d4ff"
+        ).pack(side="left", padx=15, pady=10)
+        
+        self.record_count_label = ctk.CTkLabel(
+            table_header,
+            text="0 records",
+            font=ctk.CTkFont(size=12),
+            text_color="#888888"
+        )
+        self.record_count_label.pack(side="right", padx=15, pady=10)
+        
+        # Table container
+        table_container = ctk.CTkFrame(table_frame, fg_color="#1a1a2e", corner_radius=10)
+        table_container.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        
         # Create Treeview - columns vary based on admin status
         if self.is_admin():
             columns = ("ID", "Frame Name", "Size", "Buying", "Selling", "Price", "Qty", "Profit", "Created At")
-            self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=12)
+            self.tree = ttk.Treeview(table_container, columns=columns, show="headings", height=12)
             
-            self.tree.heading("ID", text="ID")
-            self.tree.heading("Frame Name", text="Frame Name")
-            self.tree.heading("Size", text="Size")
-            self.tree.heading("Buying", text="Buying (LKR)")
-            self.tree.heading("Selling", text="Selling (LKR)")
-            self.tree.heading("Price", text="Display Price")
-            self.tree.heading("Qty", text="Qty")
-            self.tree.heading("Profit", text="Profit/Unit")
-            self.tree.heading("Created At", text="Created At")
+            self.tree.heading("ID", text="🔢 ID")
+            self.tree.heading("Frame Name", text="🖼️ Frame Name")
+            self.tree.heading("Size", text="📐 Size")
+            self.tree.heading("Buying", text="💵 Buying")
+            self.tree.heading("Selling", text="💰 Selling")
+            self.tree.heading("Price", text="🏷️ Display")
+            self.tree.heading("Qty", text="📦 Qty")
+            self.tree.heading("Profit", text="📈 Profit")
+            self.tree.heading("Created At", text="📅 Created")
             
-            self.tree.column("ID", width=40, anchor="center")
+            self.tree.column("ID", width=50, anchor="center")
             self.tree.column("Frame Name", width=150)
             self.tree.column("Size", width=70, anchor="center")
             self.tree.column("Buying", width=90, anchor="e")
@@ -156,31 +180,36 @@ class FrameManagementFrame(BaseFrame):
             self.tree.column("Price", width=90, anchor="e")
             self.tree.column("Qty", width=50, anchor="center")
             self.tree.column("Profit", width=80, anchor="e")
-            self.tree.column("Created At", width=150)
+            self.tree.column("Created At", width=130)
         else:
             columns = ("ID", "Frame Name", "Size", "Price", "Quantity", "Created At")
-            self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=12)
+            self.tree = ttk.Treeview(table_container, columns=columns, show="headings", height=12)
             
-            self.tree.heading("ID", text="ID")
-            self.tree.heading("Frame Name", text="Frame Name")
-            self.tree.heading("Size", text="Size")
-            self.tree.heading("Price", text="Price (LKR)")
-            self.tree.heading("Quantity", text="Quantity")
-            self.tree.heading("Created At", text="Created At")
+            self.tree.heading("ID", text="🔢 ID")
+            self.tree.heading("Frame Name", text="🖼️ Frame Name")
+            self.tree.heading("Size", text="📐 Size")
+            self.tree.heading("Price", text="💰 Price (LKR)")
+            self.tree.heading("Quantity", text="📦 Quantity")
+            self.tree.heading("Created At", text="📅 Created At")
             
-            self.tree.column("ID", width=50, anchor="center")
+            self.tree.column("ID", width=60, anchor="center")
             self.tree.column("Frame Name", width=200)
             self.tree.column("Size", width=100, anchor="center")
             self.tree.column("Price", width=120, anchor="e")
             self.tree.column("Quantity", width=100, anchor="center")
             self.tree.column("Created At", width=180)
         
+        # Configure row tags for alternating colors
+        self.tree.tag_configure('oddrow', background='#1e1e3f', foreground='#e0e0e0')
+        self.tree.tag_configure('evenrow', background='#252545', foreground='#e0e0e0')
+        self.tree.tag_configure('lowstock', background='#3a2020', foreground='#ff6b6b')
+        
         # Scrollbar
-        scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
+        scrollbar = ttk.Scrollbar(table_container, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=scrollbar.set)
         
-        self.tree.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
+        self.tree.pack(side="left", fill="both", expand=True, padx=(5, 0), pady=5)
+        scrollbar.pack(side="right", fill="y", pady=5, padx=(0, 5))
         
         # Bind selection
         self.tree.bind("<<TreeviewSelect>>", self.on_select)
@@ -339,13 +368,16 @@ class FrameManagementFrame(BaseFrame):
         
         frames = self.db_manager.get_all_photo_frames()
         
-        for frame in frames:
+        for i, frame in enumerate(frames):
             buying = frame.get('buying_price', 0) or 0
             selling = frame.get('selling_price', 0) or 0
             profit = selling - buying
             
-            # Color code low stock items
-            tags = ('low_stock',) if frame['quantity'] < 10 else ()
+            # Color code low stock items, otherwise use alternating colors
+            if frame['quantity'] < 10:
+                tag = 'lowstock'
+            else:
+                tag = 'evenrow' if i % 2 == 0 else 'oddrow'
             
             if self.is_admin():
                 self.tree.insert("", "end", values=(
@@ -358,7 +390,7 @@ class FrameManagementFrame(BaseFrame):
                     frame['quantity'],
                     f"{profit:.2f}",
                     frame['created_at']
-                ), tags=tags)
+                ), tags=(tag,))
             else:
                 self.tree.insert("", "end", values=(
                     frame['id'],
@@ -367,10 +399,10 @@ class FrameManagementFrame(BaseFrame):
                     f"{frame['price']:.2f}",
                     frame['quantity'],
                     frame['created_at']
-                ), tags=tags)
+                ), tags=(tag,))
         
-        # Configure tag colors
-        self.tree.tag_configure('low_stock', background='#8B0000')
+        # Update record count
+        self.record_count_label.configure(text=f"{len(frames)} records")
     
     def on_select(self, event):
         """Handle row selection"""
