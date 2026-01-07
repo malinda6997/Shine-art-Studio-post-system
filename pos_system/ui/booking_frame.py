@@ -1,8 +1,9 @@
 import customtkinter as ctk
 from tkinter import ttk
 from tkcalendar import DateEntry
-from ui.components import BaseFrame, MessageDialog
+from ui.components import BaseFrame, MessageDialog, Toast
 from datetime import datetime
+from services.invoice_generator import InvoiceGenerator
 
 
 class BookingManagementFrame(BaseFrame):
@@ -13,6 +14,7 @@ class BookingManagementFrame(BaseFrame):
         self.selected_booking_id = None
         self.categories_map = {}  # name -> id mapping
         self.services_map = {}  # name -> service data
+        self.invoice_generator = InvoiceGenerator()
         self.create_widgets()
         self.load_categories()
         self.load_bookings()
@@ -98,7 +100,8 @@ class BookingManagementFrame(BaseFrame):
             height=38,
             font=ctk.CTkFont(size=13),
             values=["Select Category First"],
-            state="readonly"
+            state="readonly",
+            command=self.on_service_change
         )
         self.service_combo.pack(fill="x", padx=15, pady=(0, 10))
         self.service_combo.set("Select Category First")
@@ -110,9 +113,15 @@ class BookingManagementFrame(BaseFrame):
             font=ctk.CTkFont(size=13, weight="bold")
         ).pack(anchor="w", padx=15, pady=(10, 5))
         
-        self.full_amount_entry = ctk.CTkEntry(form_scroll, height=38, font=ctk.CTkFont(size=13))
+        self.full_amount_entry = ctk.CTkEntry(
+            form_scroll, 
+            height=38, 
+            font=ctk.CTkFont(size=13),
+            state="readonly",
+            fg_color="#2d2d5a",
+            text_color="#00ff88"
+        )
         self.full_amount_entry.pack(fill="x", padx=15, pady=(0, 10))
-        self.full_amount_entry.bind("<KeyRelease>", lambda e: self.calculate_balance())
         
         # Advance payment
         ctk.CTkLabel(
@@ -124,8 +133,6 @@ class BookingManagementFrame(BaseFrame):
         self.advance_entry = ctk.CTkEntry(form_scroll, height=38, font=ctk.CTkFont(size=13))
         self.advance_entry.pack(fill="x", padx=15, pady=(0, 10))
         self.advance_entry.bind("<KeyRelease>", lambda e: self.calculate_balance())
-        
-        self.advance_entry = ctk.CTkEntry(form_scroll, height=38, font=ctk.CTkFont(size=13))
         self.advance_entry.pack(fill="x", padx=15, pady=(0, 10))
         self.advance_entry.bind("<KeyRelease>", lambda e: self.calculate_balance())
         
@@ -266,7 +273,7 @@ class BookingManagementFrame(BaseFrame):
         search_frame = ctk.CTkFrame(right_panel, fg_color="#252545", corner_radius=10)
         search_frame.pack(fill="x", padx=15, pady=15)
         
-        ctk.CTkLabel(search_frame, text="Search:", font=ctk.CTkFont(size=13, weight="bold")).pack(side="left", padx=5)
+        ctk.CTkLabel(search_frame, text="🔍 Search:", font=ctk.CTkFont(size=13, weight="bold")).pack(side="left", padx=5)
         self.search_entry = ctk.CTkEntry(search_frame, width=200, height=35)
         self.search_entry.pack(side="left", padx=5)
         self.search_entry.bind("<KeyRelease>", lambda e: self.search_bookings())
@@ -279,36 +286,63 @@ class BookingManagementFrame(BaseFrame):
             height=35
         ).pack(side="left", padx=5)
         
+        # Table header
+        table_header = ctk.CTkFrame(right_panel, fg_color="#252545", corner_radius=10, height=45)
+        table_header.pack(fill="x", padx=15, pady=(0, 5))
+        table_header.pack_propagate(False)
+        
+        ctk.CTkLabel(
+            table_header,
+            text="📅 Booking Records",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color="#00d4ff"
+        ).pack(side="left", padx=15, pady=10)
+        
+        self.record_count_label = ctk.CTkLabel(
+            table_header,
+            text="0 records",
+            font=ctk.CTkFont(size=11),
+            text_color="#888888"
+        )
+        self.record_count_label.pack(side="right", padx=15, pady=10)
+        
         # Table
-        table_frame = ctk.CTkFrame(right_panel, fg_color="#252545", corner_radius=10)
+        table_frame = ctk.CTkFrame(right_panel, fg_color="#1a1a2e", corner_radius=10)
         table_frame.pack(fill="both", expand=True, padx=15, pady=(0, 15))
         
         columns = ("ID", "Customer", "Mobile", "Category", "Service", "Amount", "Date", "Status")
         self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=20)
         
-        self.tree.heading("ID", text="ID")
-        self.tree.heading("Customer", text="Customer")
-        self.tree.heading("Mobile", text="Mobile")
-        self.tree.heading("Category", text="Category")
-        self.tree.heading("Service", text="Service")
-        self.tree.heading("Amount", text="Amount")
-        self.tree.heading("Date", text="Date")
-        self.tree.heading("Status", text="Status")
+        self.tree.heading("ID", text="🔢 ID")
+        self.tree.heading("Customer", text="👤 Customer")
+        self.tree.heading("Mobile", text="📱 Mobile")
+        self.tree.heading("Category", text="📁 Category")
+        self.tree.heading("Service", text="🛠️ Service")
+        self.tree.heading("Amount", text="💰 Amount")
+        self.tree.heading("Date", text="📅 Date")
+        self.tree.heading("Status", text="📊 Status")
         
-        self.tree.column("ID", width=40, anchor="center")
+        self.tree.column("ID", width=50, anchor="center")
         self.tree.column("Customer", width=100)
-        self.tree.column("Mobile", width=90)
+        self.tree.column("Mobile", width=90, anchor="center")
         self.tree.column("Category", width=100)
         self.tree.column("Service", width=100)
         self.tree.column("Amount", width=80, anchor="e")
-        self.tree.column("Date", width=80)
-        self.tree.column("Status", width=70, anchor="center")
+        self.tree.column("Date", width=90, anchor="center")
+        self.tree.column("Status", width=80, anchor="center")
+        
+        # Configure row tags
+        self.tree.tag_configure('oddrow', background='#1e1e3f', foreground='#e0e0e0')
+        self.tree.tag_configure('evenrow', background='#252545', foreground='#e0e0e0')
+        self.tree.tag_configure('pending', background='#3a2e1e', foreground='#ffd93d')
+        self.tree.tag_configure('completed', background='#1e3a2f', foreground='#00ff88')
+        self.tree.tag_configure('cancelled', background='#3a1e1e', foreground='#ff6b6b')
         
         scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=scrollbar.set)
         
-        self.tree.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
+        self.tree.pack(side="left", fill="both", expand=True, padx=(5, 0), pady=5)
+        scrollbar.pack(side="right", fill="y", pady=5, padx=(0, 5))
         
         self.tree.bind("<<TreeviewSelect>>", self.on_select)
     
@@ -325,6 +359,11 @@ class BookingManagementFrame(BaseFrame):
             self.service_combo.configure(values=["Select Category First"])
             self.service_combo.set("Select Category First")
             self.services_map = {}
+            # Clear the amount
+            self.full_amount_entry.configure(state="normal")
+            self.full_amount_entry.delete(0, "end")
+            self.full_amount_entry.configure(state="readonly")
+            self.calculate_balance()
             return
         
         category_id = self.categories_map.get(selected_category)
@@ -334,10 +373,35 @@ class BookingManagementFrame(BaseFrame):
             service_names = ["Select Service"] + list(self.services_map.keys())
             self.service_combo.configure(values=service_names)
             self.service_combo.set("Select Service")
+            # Clear the amount when category changes
+            self.full_amount_entry.configure(state="normal")
+            self.full_amount_entry.delete(0, "end")
+            self.full_amount_entry.configure(state="readonly")
+            self.calculate_balance()
         else:
             self.service_combo.configure(values=["No Services"])
             self.service_combo.set("No Services")
             self.services_map = {}
+    
+    def on_service_change(self, selected_service):
+        """Auto-fill amount when service is selected"""
+        if selected_service in ["Select Service", "Select Category First", "No Services"]:
+            # Clear the amount
+            self.full_amount_entry.configure(state="normal")
+            self.full_amount_entry.delete(0, "end")
+            self.full_amount_entry.configure(state="readonly")
+            self.calculate_balance()
+            return
+        
+        # Get service details and auto-fill price
+        service_data = self.services_map.get(selected_service)
+        if service_data and 'price' in service_data:
+            price = service_data['price']
+            self.full_amount_entry.configure(state="normal")
+            self.full_amount_entry.delete(0, "end")
+            self.full_amount_entry.insert(0, f"{float(price):.2f}")
+            self.full_amount_entry.configure(state="readonly")
+            self.calculate_balance()
     
     def calculate_balance(self):
         """Calculate and display balance"""
@@ -397,11 +461,354 @@ class BookingManagementFrame(BaseFrame):
         )
         
         if booking_id:
-            MessageDialog.show_success("Success", "Booking added successfully")
+            # Store booking data for invoice generation
+            booking_data = {
+                'id': booking_id,
+                'customer_name': name,
+                'mobile_number': mobile,
+                'photoshoot_category': photoshoot_category,
+                'full_amount': full_amount,
+                'advance_payment': advance,
+                'booking_date': date,
+                'location': location,
+                'description': description,
+                'status': 'Pending'
+            }
+            
+            # Show success message and invoice popup
             self.clear_form()
             self.load_bookings()
+            self.show_booking_invoice_popup(booking_data)
         else:
             MessageDialog.show_error("Error", "Failed to add booking")
+    
+    def show_booking_invoice_popup(self, booking_data):
+        """Show popup to generate invoice after successful booking"""
+        # Create custom popup dialog
+        popup = ctk.CTkToplevel(self)
+        popup.title("Booking Successful")
+        popup.geometry("600x580")
+        popup.resizable(False, False)
+        popup.configure(fg_color="#1a1a2e")
+        
+        # Make modal
+        popup.transient(self.winfo_toplevel())
+        popup.grab_set()
+        
+        # Center on screen
+        popup.update_idletasks()
+        x = (popup.winfo_screenwidth() // 2) - 300
+        y = (popup.winfo_screenheight() // 2) - 290
+        popup.geometry(f"600x580+{x}+{y}")
+        
+        # Main container
+        main_frame = ctk.CTkFrame(popup, fg_color="#1e1e3f", corner_radius=15)
+        main_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        # Success icon and message
+        ctk.CTkLabel(
+            main_frame,
+            text="✅",
+            font=ctk.CTkFont(size=50)
+        ).pack(pady=(25, 10))
+        
+        ctk.CTkLabel(
+            main_frame,
+            text="Booking Created Successfully!",
+            font=ctk.CTkFont(size=20, weight="bold"),
+            text_color="#00ff88"
+        ).pack(pady=(0, 15))
+        
+        # Booking summary
+        summary_frame = ctk.CTkFrame(main_frame, fg_color="#252545", corner_radius=10)
+        summary_frame.pack(fill="x", padx=25, pady=10)
+        
+        # Parse category and service
+        photoshoot_cat = booking_data['photoshoot_category']
+        if ' - ' in photoshoot_cat:
+            parts = photoshoot_cat.split(' - ', 1)
+            category = parts[0]
+            service = parts[1] if len(parts) > 1 else ''
+        else:
+            category = photoshoot_cat
+            service = ''
+        
+        summary_text = f"""
+👤 Customer: {booking_data['customer_name']}
+📱 Mobile: {booking_data['mobile_number']}
+📁 Category: {category}
+🛠️ Service: {service}
+📅 Date: {booking_data['booking_date']}
+💰 Amount: LKR {float(booking_data['full_amount']):,.2f}
+💵 Advance: LKR {float(booking_data['advance_payment']):,.2f}
+        """
+        
+        ctk.CTkLabel(
+            summary_frame,
+            text=summary_text.strip(),
+            font=ctk.CTkFont(size=12),
+            justify="left",
+            anchor="w"
+        ).pack(padx=15, pady=15, anchor="w")
+        
+        # Question
+        ctk.CTkLabel(
+            main_frame,
+            text="Would you like to generate a receipt?",
+            font=ctk.CTkFont(size=14),
+            text_color="#aaaaaa"
+        ).pack(pady=(15, 20))
+        
+        # Buttons frame
+        btn_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+        btn_frame.pack(pady=(0, 20))
+        
+        # Store filepath for later use
+        self.generated_invoice_path = None
+        
+        def generate_invoice():
+            """Generate and show invoice"""
+            try:
+                # Get current user's name
+                current_user = self.auth_manager.get_current_user()
+                created_by_name = current_user.get('full_name', 'Staff') if current_user else 'Staff'
+                user_id = self.auth_manager.get_user_id()
+                
+                # Generate the invoice PDF
+                filepath = self.invoice_generator.generate_booking_invoice(booking_data, created_by_name)
+                self.generated_invoice_path = filepath
+                
+                # Extract invoice number from filename (Booking_BK-YYYYMMDDHHMMSS.pdf)
+                import os
+                filename = os.path.basename(filepath)
+                invoice_number = filename.replace('Booking_', '').replace('.pdf', '')
+                
+                # Save invoice to database
+                full_amount = float(booking_data['full_amount'])
+                advance_payment = float(booking_data['advance_payment'])
+                balance = full_amount - advance_payment
+                
+                invoice_id = self.db_manager.create_invoice(
+                    invoice_number=invoice_number,
+                    customer_id=None,  # Guest booking
+                    subtotal=full_amount,
+                    discount=0,
+                    total_amount=full_amount,
+                    paid_amount=advance_payment,
+                    balance_amount=balance,
+                    created_by=user_id,
+                    category_service_cost=0,
+                    advance_payment=advance_payment,
+                    guest_name=booking_data['customer_name'],
+                    booking_id=booking_data.get('id')
+                )
+                
+                # Add invoice item (the service)
+                if invoice_id:
+                    self.db_manager.add_invoice_item(
+                        invoice_id=invoice_id,
+                        item_type='BookingService',
+                        item_id=booking_data.get('id', 0),
+                        item_name=booking_data['photoshoot_category'],
+                        quantity=1,
+                        unit_price=full_amount,
+                        total_price=full_amount,
+                        buying_price=0
+                    )
+                
+                # Show invoice preview popup
+                popup.destroy()
+                self.show_invoice_preview_popup(filepath, booking_data)
+                
+            except Exception as e:
+                Toast.error(self, f"Error generating invoice: {str(e)}")
+        
+        def close_popup():
+            """Close without generating invoice"""
+            popup.destroy()
+            Toast.success(self, "Booking saved successfully!")
+        
+        # Generate Invoice button
+        ctk.CTkButton(
+            btn_frame,
+            text="📄 Generate Receipt",
+            command=generate_invoice,
+            width=180,
+            height=45,
+            font=ctk.CTkFont(size=14, weight="bold"),
+            fg_color="#00d4ff",
+            text_color="#1a1a2e",
+            hover_color="#00a8cc"
+        ).pack(side="left", padx=10)
+        
+        # Cancel button
+        ctk.CTkButton(
+            btn_frame,
+            text="✕ Close",
+            command=close_popup,
+            width=120,
+            height=45,
+            font=ctk.CTkFont(size=14, weight="bold"),
+            fg_color="#2d2d5a",
+            hover_color="#3d3d7a"
+        ).pack(side="left", padx=10)
+        
+        # Handle window close
+        popup.protocol("WM_DELETE_WINDOW", close_popup)
+    
+    def show_invoice_preview_popup(self, filepath, booking_data):
+        """Show invoice preview with print option"""
+        # Create preview popup
+        preview = ctk.CTkToplevel(self)
+        preview.title("Booking Receipt")
+        preview.geometry("650x600")
+        preview.resizable(False, False)
+        preview.configure(fg_color="#1a1a2e")
+        
+        # Make modal
+        preview.transient(self.winfo_toplevel())
+        preview.grab_set()
+        
+        # Center on screen
+        preview.update_idletasks()
+        x = (preview.winfo_screenwidth() // 2) - 325
+        y = (preview.winfo_screenheight() // 2) - 300
+        preview.geometry(f"650x600+{x}+{y}")
+        
+        # Main container
+        main_frame = ctk.CTkFrame(preview, fg_color="#1e1e3f", corner_radius=15)
+        main_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        # Header
+        ctk.CTkLabel(
+            main_frame,
+            text="📄",
+            font=ctk.CTkFont(size=40)
+        ).pack(pady=(20, 5))
+        
+        ctk.CTkLabel(
+            main_frame,
+            text="Receipt Generated Successfully!",
+            font=ctk.CTkFont(size=18, weight="bold"),
+            text_color="#00ff88"
+        ).pack(pady=(0, 15))
+        
+        # Info frame
+        info_frame = ctk.CTkFrame(main_frame, fg_color="#252545", corner_radius=10)
+        info_frame.pack(fill="x", padx=25, pady=10)
+        
+        ctk.CTkLabel(
+            info_frame,
+            text=f"📋 Customer: {booking_data['customer_name']}",
+            font=ctk.CTkFont(size=13),
+            anchor="w"
+        ).pack(padx=15, pady=(15, 5), anchor="w")
+        
+        ctk.CTkLabel(
+            info_frame,
+            text=f"📅 Booking Date: {booking_data['booking_date']}",
+            font=ctk.CTkFont(size=13),
+            anchor="w"
+        ).pack(padx=15, pady=5, anchor="w")
+        
+        full_amt = float(booking_data['full_amount'])
+        advance = float(booking_data['advance_payment'])
+        balance = full_amt - advance
+        
+        ctk.CTkLabel(
+            info_frame,
+            text=f"💰 Total Amount: LKR {full_amt:,.2f}",
+            font=ctk.CTkFont(size=13),
+            anchor="w"
+        ).pack(padx=15, pady=5, anchor="w")
+        
+        ctk.CTkLabel(
+            info_frame,
+            text=f"💵 Advance Paid: LKR {advance:,.2f}",
+            font=ctk.CTkFont(size=13),
+            anchor="w"
+        ).pack(padx=15, pady=5, anchor="w")
+        
+        balance_color = "#ff6b6b" if balance > 0 else "#00ff88"
+        ctk.CTkLabel(
+            info_frame,
+            text=f"⏳ Balance Due: LKR {balance:,.2f}",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color=balance_color,
+            anchor="w"
+        ).pack(padx=15, pady=(5, 15), anchor="w")
+        
+        # File info
+        import os
+        filename = os.path.basename(filepath)
+        ctk.CTkLabel(
+            main_frame,
+            text=f"📁 File: {filename}",
+            font=ctk.CTkFont(size=11),
+            text_color="#888888"
+        ).pack(pady=10)
+        
+        # Buttons frame
+        btn_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+        btn_frame.pack(pady=20)
+        
+        def open_invoice():
+            """Open invoice in PDF viewer"""
+            self.invoice_generator.open_invoice(filepath)
+        
+        def print_invoice():
+            """Print the invoice"""
+            try:
+                self.invoice_generator.print_invoice(filepath)
+                Toast.success(self, "Receipt sent to printer!")
+            except Exception as e:
+                Toast.error(self, f"Print error: {str(e)}")
+        
+        def close_preview():
+            """Close preview"""
+            preview.destroy()
+            Toast.success(self, "Booking completed successfully!")
+        
+        # View PDF button
+        ctk.CTkButton(
+            btn_frame,
+            text="👁️ View PDF",
+            command=open_invoice,
+            width=130,
+            height=45,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            fg_color="#00d4ff",
+            text_color="#1a1a2e",
+            hover_color="#00a8cc"
+        ).pack(side="left", padx=8)
+        
+        # Print button
+        ctk.CTkButton(
+            btn_frame,
+            text="🖨️ Print",
+            command=print_invoice,
+            width=130,
+            height=45,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            fg_color="#00ff88",
+            text_color="#1a1a2e",
+            hover_color="#00cc6a"
+        ).pack(side="left", padx=8)
+        
+        # Close button
+        ctk.CTkButton(
+            btn_frame,
+            text="✓ Done",
+            command=close_preview,
+            width=100,
+            height=45,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            fg_color="#2d2d5a",
+            hover_color="#3d3d7a"
+        ).pack(side="left", padx=8)
+        
+        # Handle window close
+        preview.protocol("WM_DELETE_WINDOW", close_preview)
     
     def update_booking(self):
         """Update selected booking"""
@@ -486,7 +893,10 @@ class BookingManagementFrame(BaseFrame):
         self.service_combo.configure(values=["Select Category First"])
         self.service_combo.set("Select Category First")
         self.services_map = {}
+        # Clear read-only full_amount_entry
+        self.full_amount_entry.configure(state="normal")
         self.full_amount_entry.delete(0, 'end')
+        self.full_amount_entry.configure(state="readonly")
         self.advance_entry.delete(0, 'end')
         self.location_entry.delete(0, 'end')
         self.description_text.delete("1.0", "end")
@@ -506,12 +916,16 @@ class BookingManagementFrame(BaseFrame):
         
         bookings = self.db_manager.get_all_bookings()
         
-        for booking in bookings:
-            tags = ()
-            if booking['status'] == 'Completed':
-                tags = ('completed',)
-            elif booking['status'] == 'Cancelled':
-                tags = ('cancelled',)
+        for i, booking in enumerate(bookings):
+            status = booking['status']
+            if status == 'Completed':
+                tag = 'completed'
+            elif status == 'Cancelled':
+                tag = 'cancelled'
+            elif status == 'Pending':
+                tag = 'pending'
+            else:
+                tag = 'evenrow' if i % 2 == 0 else 'oddrow'
             
             # Split photoshoot_category into category and service
             photoshoot_cat = booking['photoshoot_category']
@@ -532,10 +946,10 @@ class BookingManagementFrame(BaseFrame):
                 f"{booking['full_amount']:.2f}",
                 booking['booking_date'],
                 booking['status']
-            ), tags=tags)
+            ), tags=(tag,))
         
-        self.tree.tag_configure('completed', background='#006400')
-        self.tree.tag_configure('cancelled', background='#8B0000')
+        # Update record count
+        self.record_count_label.configure(text=f"{len(bookings)} records")
     
     def search_bookings(self):
         """Search bookings"""
@@ -550,12 +964,16 @@ class BookingManagementFrame(BaseFrame):
         
         bookings = self.db_manager.search_bookings(search_term)
         
-        for booking in bookings:
-            tags = ()
-            if booking['status'] == 'Completed':
-                tags = ('completed',)
-            elif booking['status'] == 'Cancelled':
-                tags = ('cancelled',)
+        for i, booking in enumerate(bookings):
+            status = booking['status']
+            if status == 'Completed':
+                tag = 'completed'
+            elif status == 'Cancelled':
+                tag = 'cancelled'
+            elif status == 'Pending':
+                tag = 'pending'
+            else:
+                tag = 'evenrow' if i % 2 == 0 else 'oddrow'
             
             # Split photoshoot_category into category and service
             photoshoot_cat = booking['photoshoot_category']
@@ -576,7 +994,10 @@ class BookingManagementFrame(BaseFrame):
                 f"{booking['full_amount']:.2f}",
                 booking['booking_date'],
                 booking['status']
-            ), tags=tags)
+            ), tags=(tag,))
+        
+        # Update record count
+        self.record_count_label.configure(text=f"{len(bookings)} records")
     
     def on_select(self, event):
         """Handle row selection"""
@@ -623,8 +1044,10 @@ class BookingManagementFrame(BaseFrame):
                 self.service_combo.configure(values=["Select Category First"])
                 self.service_combo.set("Select Category First")
             
+            self.full_amount_entry.configure(state="normal")
             self.full_amount_entry.delete(0, 'end')
             self.full_amount_entry.insert(0, str(booking['full_amount']))
+            self.full_amount_entry.configure(state="readonly")
             
             self.advance_entry.delete(0, 'end')
             self.advance_entry.insert(0, str(booking['advance_payment']))

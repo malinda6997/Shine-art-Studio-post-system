@@ -198,10 +198,18 @@ class ModernConfirmDialog(ctk.CTkToplevel):
     
     def on_confirm(self):
         self.result = True
-        self.destroy()
+        self._close_dialog()
     
     def on_cancel(self):
         self.result = False
+        self._close_dialog()
+    
+    def _close_dialog(self):
+        """Properly close dialog and release grab"""
+        try:
+            self.grab_release()
+        except:
+            pass
         self.destroy()
     
     def get_result(self) -> bool:
@@ -475,7 +483,11 @@ class LoginWindow(ctk.CTkToplevel):
         user = self.auth_manager.authenticate(username, password)
         
         if user:
-            # No popup - just login directly
+            # Release grab before destroying to prevent input freeze
+            try:
+                self.grab_release()
+            except:
+                pass
             self.destroy()
             self.on_success(user)
         else:
@@ -485,6 +497,10 @@ class LoginWindow(ctk.CTkToplevel):
     
     def on_close(self):
         """Handle window close event - exit entire application"""
+        try:
+            self.grab_release()
+        except:
+            pass
         self.destroy()
         self.parent.destroy()
 
@@ -553,3 +569,73 @@ class BaseFrame(ctk.CTkFrame):
     def is_admin(self) -> bool:
         """Check if current user is admin"""
         return self.auth_manager.is_admin()
+    
+    def restore_focus(self, widget=None):
+        """Restore focus to widget or main window after dialog/popup closes"""
+        try:
+            self.winfo_toplevel().focus_force()
+            if widget:
+                widget.focus_set()
+        except:
+            pass
+    
+    def ensure_inputs_enabled(self, *widgets):
+        """Ensure input widgets are in normal state and editable"""
+        for widget in widgets:
+            try:
+                if hasattr(widget, 'configure'):
+                    widget.configure(state="normal")
+            except:
+                pass
+    
+    def create_modern_table(self, parent, columns, column_widths=None, height=15):
+        """Create a modern styled treeview table with enhanced visuals"""
+        from tkinter import ttk
+        
+        # Create container frame with rounded corners effect
+        table_container = ctk.CTkFrame(parent, fg_color="#1a1a2e", corner_radius=10)
+        table_container.pack(fill="both", expand=True, padx=5, pady=5)
+        
+        # Inner frame for table
+        inner_frame = ctk.CTkFrame(table_container, fg_color="transparent")
+        inner_frame.pack(fill="both", expand=True, padx=2, pady=2)
+        
+        # Create Treeview
+        tree = ttk.Treeview(inner_frame, columns=columns, show="headings", height=height)
+        
+        # Configure columns
+        default_width = 120
+        for i, col in enumerate(columns):
+            tree.heading(col, text=col)
+            width = column_widths.get(col, default_width) if column_widths else default_width
+            anchor = "center" if col in ["ID", "Status", "Qty", "Role"] else "w"
+            if "Price" in col or "Amount" in col or "Total" in col or "LKR" in col or "Profit" in col:
+                anchor = "e"
+            tree.column(col, width=width, anchor=anchor)
+        
+        # Configure row tags for alternating colors
+        tree.tag_configure('oddrow', background='#1e1e3f', foreground='#e0e0e0')
+        tree.tag_configure('evenrow', background='#252545', foreground='#e0e0e0')
+        tree.tag_configure('selected', background='#00d4ff', foreground='#1a1a2e')
+        
+        # Modern scrollbar
+        scrollbar = ttk.Scrollbar(inner_frame, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=scrollbar.set)
+        
+        tree.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        return tree, table_container
+    
+    def insert_table_row(self, tree, values, index=None):
+        """Insert a row with alternating colors"""
+        if index is None:
+            index = len(tree.get_children())
+        tag = 'evenrow' if index % 2 == 0 else 'oddrow'
+        tree.insert("", "end", values=values, tags=(tag,))
+    
+    def refresh_table_tags(self, tree):
+        """Refresh alternating row colors after modifications"""
+        for i, item in enumerate(tree.get_children()):
+            tag = 'evenrow' if i % 2 == 0 else 'oddrow'
+            tree.item(item, tags=(tag,))

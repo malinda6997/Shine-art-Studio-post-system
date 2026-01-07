@@ -1,59 +1,77 @@
 import sqlite3
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Tuple
+import threading
 
 
 class DatabaseManager:
     """Central database manager for all CRUD operations"""
     
+    _lock = threading.Lock()
+    
     def __init__(self, db_path='pos_database.db'):
         self.db_path = db_path
         
     def get_connection(self):
-        """Get database connection"""
-        conn = sqlite3.connect(self.db_path)
+        """Get database connection with timeout and WAL mode"""
+        conn = sqlite3.connect(self.db_path, timeout=30.0)
         conn.row_factory = sqlite3.Row
+        # Enable WAL mode for better concurrent access
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA busy_timeout=30000")
         return conn
     
     def execute_query(self, query: str, params: Tuple = ()) -> List[Dict[str, Any]]:
         """Execute a SELECT query and return results as list of dicts"""
+        conn = None
         try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            cursor.execute(query, params)
-            rows = cursor.fetchall()
-            conn.close()
-            return [dict(row) for row in rows]
+            with self._lock:
+                conn = self.get_connection()
+                cursor = conn.cursor()
+                cursor.execute(query, params)
+                rows = cursor.fetchall()
+                return [dict(row) for row in rows]
         except sqlite3.Error as e:
             print(f"Database error: {e}")
             return []
+        finally:
+            if conn:
+                conn.close()
     
     def execute_update(self, query: str, params: Tuple = ()) -> bool:
         """Execute INSERT, UPDATE, or DELETE query"""
+        conn = None
         try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            cursor.execute(query, params)
-            conn.commit()
-            conn.close()
-            return True
+            with self._lock:
+                conn = self.get_connection()
+                cursor = conn.cursor()
+                cursor.execute(query, params)
+                conn.commit()
+                return True
         except sqlite3.Error as e:
             print(f"Database error: {e}")
             return False
+        finally:
+            if conn:
+                conn.close()
     
     def execute_insert(self, query: str, params: Tuple = ()) -> Optional[int]:
         """Execute INSERT query and return last inserted id"""
+        conn = None
         try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            cursor.execute(query, params)
-            last_id = cursor.lastrowid
-            conn.commit()
-            conn.close()
-            return last_id
+            with self._lock:
+                conn = self.get_connection()
+                cursor = conn.cursor()
+                cursor.execute(query, params)
+                last_id = cursor.lastrowid
+                conn.commit()
+                return last_id
         except sqlite3.Error as e:
             print(f"Database error: {e}")
             return None
+        finally:
+            if conn:
+                conn.close()
     
     # Customer operations
     def add_customer(self, full_name: str, mobile_number: str) -> Optional[int]:
@@ -247,17 +265,18 @@ class DatabaseManager:
                       discount: float, total_amount: float, paid_amount: float,
                       balance_amount: float, created_by: int, 
                       category_service_cost: float = 0, advance_payment: float = 0,
-                      guest_name: str = None) -> Optional[int]:
+                      guest_name: str = None, booking_id: int = None) -> Optional[int]:
         """Create a new invoice with category service cost and advance payment.
-        For guest customers, customer_id is None and guest_name is provided."""
+        For guest customers, customer_id is None and guest_name is provided.
+        For bookings, booking_id links invoice to booking."""
         query = '''
-            INSERT INTO invoices (invoice_number, customer_id, guest_name, subtotal, discount,
+            INSERT INTO invoices (invoice_number, booking_id, customer_id, guest_name, subtotal, discount,
                                 category_service_cost, advance_payment, total_amount, 
                                 paid_amount, balance_amount, created_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         '''
-        return self.execute_insert(query, (invoice_number, customer_id, guest_name, subtotal, 
-                                          discount, category_service_cost, advance_payment,
+        return self.execute_insert(query, (invoice_number, booking_id, customer_id, guest_name, 
+                                          subtotal, discount, category_service_cost, advance_payment,
                                           total_amount, paid_amount, balance_amount, created_by))
     
     def add_invoice_item(self, invoice_id: int, item_type: str, item_id: int,
@@ -288,11 +307,14 @@ class DatabaseManager:
         return results[0] if results else None
     
     def get_invoice_by_number(self, invoice_number: str) -> Optional[Dict[str, Any]]:
-        """Get invoice by invoice number"""
+        """Get invoice by invoice number (handles both registered and guest customers)"""
         query = '''
-            SELECT i.*, c.full_name, c.mobile_number, u.full_name as created_by_name
+            SELECT i.*, 
+                   COALESCE(c.full_name, i.guest_name) as full_name, 
+                   c.mobile_number,
+                   u.full_name as created_by_name
             FROM invoices i
-            JOIN customers c ON i.customer_id = c.id
+            LEFT JOIN customers c ON i.customer_id = c.id
             JOIN users u ON i.created_by = u.id
             WHERE i.invoice_number = ?
         '''
@@ -305,29 +327,34 @@ class DatabaseManager:
         return self.execute_query(query, (invoice_id,))
     
     def get_all_invoices(self, limit: int = 100) -> List[Dict[str, Any]]:
-        """Get all invoices with customer info"""
+        """Get all invoices with customer info (handles both registered and guest customers)"""
         query = '''
-            SELECT i.*, c.full_name, c.mobile_number
+            SELECT i.*, 
+                   COALESCE(c.full_name, i.guest_name) as full_name, 
+                   c.mobile_number
             FROM invoices i
-            JOIN customers c ON i.customer_id = c.id
+            LEFT JOIN customers c ON i.customer_id = c.id
             ORDER BY i.created_at DESC
             LIMIT ?
         '''
         return self.execute_query(query, (limit,))
     
     def search_invoices(self, search_term: str) -> List[Dict[str, Any]]:
-        """Search invoices by invoice number or customer name/mobile"""
+        """Search invoices by invoice number or customer name/mobile (handles guest customers)"""
         query = '''
-            SELECT i.*, c.full_name, c.mobile_number
+            SELECT i.*, 
+                   COALESCE(c.full_name, i.guest_name) as full_name, 
+                   c.mobile_number
             FROM invoices i
-            JOIN customers c ON i.customer_id = c.id
+            LEFT JOIN customers c ON i.customer_id = c.id
             WHERE i.invoice_number LIKE ? 
                OR c.full_name LIKE ? 
                OR c.mobile_number LIKE ?
+               OR i.guest_name LIKE ?
             ORDER BY i.created_at DESC
         '''
         search_pattern = f'%{search_term}%'
-        return self.execute_query(query, (search_pattern, search_pattern, search_pattern))
+        return self.execute_query(query, (search_pattern, search_pattern, search_pattern, search_pattern))
     
     def generate_invoice_number(self) -> str:
         """Generate a unique invoice number"""
@@ -553,4 +580,72 @@ class DatabaseManager:
             'total_booking_amount': total_booking_amount,
             'total_advance': total_advance
         }
+    
+    # Bill operations (thermal receipts for normal sales)
+    def create_bill(self, bill_number: str, customer_id: int, subtotal: float,
+                   discount: float, total_amount: float, created_by: int,
+                   service_charge: float = 0, cash_given: float = 0,
+                   guest_name: str = None) -> Optional[int]:
+        """Create a new bill (thermal receipt) for normal sales.
+        For guest customers, customer_id is None and guest_name is provided."""
+        query = '''
+            INSERT INTO bills (bill_number, customer_id, guest_name, subtotal, discount,
+                             service_charge, total_amount, cash_given, created_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        '''
+        return self.execute_insert(query, (bill_number, customer_id, guest_name, subtotal,
+                                          discount, service_charge, total_amount, 
+                                          cash_given, created_by))
+    
+    def add_bill_item(self, bill_id: int, item_type: str, item_id: int,
+                     item_name: str, quantity: int, unit_price: float,
+                     total_price: float, buying_price: float = 0) -> Optional[int]:
+        """Add an item to a bill"""
+        query = '''
+            INSERT INTO bill_items (bill_id, item_type, item_id, item_name,
+                                   quantity, unit_price, total_price, buying_price)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        '''
+        return self.execute_insert(query, (bill_id, item_type, item_id, item_name,
+                                          quantity, unit_price, total_price, buying_price))
+    
+    def get_bill_by_id(self, bill_id: int) -> Optional[Dict[str, Any]]:
+        """Get bill with customer details"""
+        query = '''
+            SELECT b.*, 
+                   COALESCE(c.full_name, b.guest_name) as full_name,
+                   c.mobile_number,
+                   u.full_name as created_by_name
+            FROM bills b
+            LEFT JOIN customers c ON b.customer_id = c.id
+            JOIN users u ON b.created_by = u.id
+            WHERE b.id = ?
+        '''
+        results = self.execute_query(query, (bill_id,))
+        return results[0] if results else None
+    
+    def get_bill_items(self, bill_id: int) -> List[Dict[str, Any]]:
+        """Get all items for a bill"""
+        query = 'SELECT * FROM bill_items WHERE bill_id = ?'
+        return self.execute_query(query, (bill_id,))
+    
+    def generate_bill_number(self) -> str:
+        """Generate a unique bill number"""
+        query = 'SELECT MAX(id) as max_id FROM bills'
+        result = self.execute_query(query)
+        max_id = result[0]['max_id'] if result and result[0]['max_id'] else 0
+        return f"BILL{str(max_id + 1).zfill(6)}"
+    
+    def get_all_bills(self, limit: int = 100) -> List[Dict[str, Any]]:
+        """Get all bills with customer info"""
+        query = '''
+            SELECT b.*, 
+                   COALESCE(c.full_name, b.guest_name) as full_name,
+                   c.mobile_number
+            FROM bills b
+            LEFT JOIN customers c ON b.customer_id = c.id
+            ORDER BY b.created_at DESC
+            LIMIT ?
+        '''
+        return self.execute_query(query, (limit,))
 

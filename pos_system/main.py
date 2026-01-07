@@ -39,25 +39,73 @@ class MainApplication(ctk.CTk):
         # Set application window icon
         self._set_window_icon()
         
-        # Configure ttk styles for tables with larger font
+        # Configure ttk styles for modern tables
         style = ttk.Style()
         style.theme_use("clam")
+        
+        # Modern table styling with gradient-like effect
         style.configure("Treeview",
-            background="#1e1e3f",
-            foreground="white",
-            fieldbackground="#1e1e3f",
+            background="#1a1a2e",
+            foreground="#e0e0e0",
+            fieldbackground="#1a1a2e",
             font=("Segoe UI", 12),
-            rowheight=32
+            rowheight=45,
+            borderwidth=0
         )
+        
+        # Modern header styling with accent color
         style.configure("Treeview.Heading",
             background="#252545",
-            foreground="white",
-            font=("Segoe UI", 12, "bold")
+            foreground="#00d4ff",
+            font=("Segoe UI", 12, "bold"),
+            borderwidth=0,
+            relief="flat",
+            padding=(10, 8)
         )
+        
+        # Selection and hover effects
         style.map("Treeview",
-            background=[("selected", "#00d4ff")],
-            foreground=[("selected", "#1a1a2e")]
+            background=[
+                ("selected", "#00d4ff"),
+                ("!selected", "#1a1a2e")
+            ],
+            foreground=[
+                ("selected", "#1a1a2e"),
+                ("!selected", "#e0e0e0")
+            ]
         )
+        
+        # Header hover effect
+        style.map("Treeview.Heading",
+            background=[
+                ("active", "#3d3d7a"),
+                ("!active", "#252545")
+            ],
+            foreground=[
+                ("active", "#00ff88"),
+                ("!active", "#00d4ff")
+            ]
+        )
+        
+        # Modern scrollbar styling
+        style.configure("Vertical.TScrollbar",
+            background="#2d2d5a",
+            troughcolor="#1a1a2e",
+            borderwidth=0,
+            arrowsize=0,
+            width=12
+        )
+        
+        style.map("Vertical.TScrollbar",
+            background=[
+                ("active", "#00d4ff"),
+                ("!active", "#3d3d7a")
+            ]
+        )
+        
+        # Configure alternating row colors using tags (applied in frames)
+        style.configure("oddrow.Treeview", background="#1e1e3f")
+        style.configure("evenrow.Treeview", background="#252545")
         
         # Hide main window initially
         self.withdraw()
@@ -87,11 +135,22 @@ class MainApplication(ctk.CTk):
     def _set_window_icon(self):
         """Set the application window icon"""
         try:
-            icon_path = os.path.join(os.path.dirname(__file__), "assets", "logos", "App logo.jpg")
-            if os.path.exists(icon_path):
-                icon_image = Image.open(icon_path)
+            # Use the uploaded appLogo.ico directly
+            ico_path = os.path.join(os.path.dirname(__file__), "assets", "logos", "appLogo.ico")
+            
+            if os.path.exists(ico_path):
+                # Set the window icon using iconbitmap for Windows taskbar
+                self.iconbitmap(ico_path)
+                
+                # Also load as image for iconphoto
                 from PIL import ImageTk
-                # Create multiple sizes for better display
+                icon_image = Image.open(ico_path)
+                
+                # Convert to RGBA if needed
+                if icon_image.mode != 'RGBA':
+                    icon_image = icon_image.convert('RGBA')
+                
+                # Also set iconphoto for other platforms/contexts
                 icon_sizes = [(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
                 icon_photos = []
                 for size in icon_sizes:
@@ -110,6 +169,9 @@ class MainApplication(ctk.CTk):
         """Handle successful login"""
         self.current_user = user
         self.deiconify()
+        
+        # Re-set window icon to ensure consistency
+        self._set_window_icon()
         
         # Center window
         self.update_idletasks()
@@ -263,27 +325,116 @@ class MainApplication(ctk.CTk):
             widget.destroy()
     
     def logout(self):
-        """Logout and return to login screen"""
-        # Show confirmation dialog
-        if Toast.confirm(self, "Logout", "Are you sure you want to logout?", 
-                        "Yes, Logout", "Cancel", "🚪", "#ff4757"):
+        """Logout with option to login again or exit application"""
+        # Create custom dialog
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("Logout")
+        dialog.geometry("400x200")
+        dialog.transient(self)
+        dialog.grab_set()
+        dialog.configure(fg_color="#1a1a2e")
+        dialog.resizable(False, False)
+        
+        # Center dialog
+        dialog.update_idletasks()
+        x = (dialog.winfo_screenwidth() // 2) - 200
+        y = (dialog.winfo_screenheight() // 2) - 100
+        dialog.geometry(f"400x200+{x}+{y}")
+        
+        result = {"action": None}
+        
+        def close_dialog():
+            try:
+                dialog.grab_release()
+            except:
+                pass
+            dialog.destroy()
+        
+        def login_again():
+            result["action"] = "login"
+            close_dialog()
+        
+        def exit_app():
+            result["action"] = "exit"
+            close_dialog()
+        
+        def cancel():
+            result["action"] = "cancel"
+            close_dialog()
+        
+        dialog.protocol("WM_DELETE_WINDOW", cancel)
+        
+        # Icon and message
+        ctk.CTkLabel(
+            dialog,
+            text="🚪",
+            font=ctk.CTkFont(size=40)
+        ).pack(pady=(20, 10))
+        
+        ctk.CTkLabel(
+            dialog,
+            text="Do you want to login again?",
+            font=ctk.CTkFont(size=16, weight="bold")
+        ).pack(pady=(0, 20))
+        
+        # Buttons
+        btn_frame = ctk.CTkFrame(dialog, fg_color="transparent")
+        btn_frame.pack(pady=10)
+        
+        ctk.CTkButton(
+            btn_frame,
+            text="Yes, Login Again",
+            command=login_again,
+            width=120,
+            height=40,
+            fg_color="#00d4ff",
+            text_color="#1a1a2e",
+            hover_color="#00a8cc",
+            font=ctk.CTkFont(size=12, weight="bold")
+        ).pack(side="left", padx=5)
+        
+        ctk.CTkButton(
+            btn_frame,
+            text="No, Exit App",
+            command=exit_app,
+            width=120,
+            height=40,
+            fg_color="#ff4757",
+            hover_color="#ff3344",
+            font=ctk.CTkFont(size=12, weight="bold")
+        ).pack(side="left", padx=5)
+        
+        ctk.CTkButton(
+            btn_frame,
+            text="Cancel",
+            command=cancel,
+            width=80,
+            height=40,
+            fg_color="#2d2d5a",
+            hover_color="#3d3d7a"
+        ).pack(side="left", padx=5)
+        
+        # Wait for dialog
+        dialog.wait_window()
+        
+        if result["action"] == "login":
+            # Logout and show login screen
             self.auth_manager.logout()
             self.current_user = None
             
-            # Clear main container
             if self.main_container:
                 self.main_container.destroy()
                 self.main_container = None
             
-            # Reset references
             self.content_frame = None
             self.sidebar = None
-            
-            # Hide the main window before showing login
             self.withdraw()
-            
-            # Show login
             self.show_login()
+            
+        elif result["action"] == "exit":
+            # Exit application
+            self.auth_manager.logout()
+            self.destroy()
 
 
 def main():

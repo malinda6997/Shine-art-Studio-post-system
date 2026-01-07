@@ -237,21 +237,37 @@ class StaffReportsFrame(ctk.CTkFrame):
     
     def create_invoices_table(self):
         """Create invoices table"""
+        # Table header
+        header_frame = ctk.CTkFrame(self.tab_invoices, fg_color="#252545", corner_radius=10, height=40)
+        header_frame.pack(fill="x", padx=10, pady=(10, 5))
+        header_frame.pack_propagate(False)
+        
+        ctk.CTkLabel(
+            header_frame,
+            text="🧾 Invoice Records",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color="#00d4ff"
+        ).pack(side="left", padx=15, pady=8)
+        
+        # Table container
+        table_container = ctk.CTkFrame(self.tab_invoices, fg_color="#1a1a2e", corner_radius=10)
+        table_container.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        
         columns = ('invoice_no', 'customer', 'total', 'paid', 'balance', 'time')
         
         self.invoices_tree = ttk.Treeview(
-            self.tab_invoices,
+            table_container,
             columns=columns,
             show='headings',
             height=12
         )
         
-        self.invoices_tree.heading('invoice_no', text='Invoice #')
-        self.invoices_tree.heading('customer', text='Customer')
-        self.invoices_tree.heading('total', text='Total (LKR)')
-        self.invoices_tree.heading('paid', text='Paid (LKR)')
-        self.invoices_tree.heading('balance', text='Balance (LKR)')
-        self.invoices_tree.heading('time', text='Time')
+        self.invoices_tree.heading('invoice_no', text='🔢 Invoice #')
+        self.invoices_tree.heading('customer', text='👤 Customer')
+        self.invoices_tree.heading('total', text='💰 Total')
+        self.invoices_tree.heading('paid', text='✅ Paid')
+        self.invoices_tree.heading('balance', text='⏳ Balance')
+        self.invoices_tree.heading('time', text='🕐 Time')
         
         self.invoices_tree.column('invoice_no', width=100, anchor='center')
         self.invoices_tree.column('customer', width=150, anchor='w')
@@ -260,29 +276,49 @@ class StaffReportsFrame(ctk.CTkFrame):
         self.invoices_tree.column('balance', width=100, anchor='e')
         self.invoices_tree.column('time', width=80, anchor='center')
         
-        scrollbar = ttk.Scrollbar(self.tab_invoices, orient="vertical", command=self.invoices_tree.yview)
+        # Configure row tags
+        self.invoices_tree.tag_configure('oddrow', background='#1e1e3f', foreground='#e0e0e0')
+        self.invoices_tree.tag_configure('evenrow', background='#252545', foreground='#e0e0e0')
+        
+        scrollbar = ttk.Scrollbar(table_container, orient="vertical", command=self.invoices_tree.yview)
         self.invoices_tree.configure(yscrollcommand=scrollbar.set)
         
-        self.invoices_tree.pack(side="left", fill="both", expand=True, padx=(10, 0), pady=10)
-        scrollbar.pack(side="right", fill="y", pady=10, padx=(0, 10))
+        self.invoices_tree.pack(side="left", fill="both", expand=True, padx=(5, 0), pady=5)
+        scrollbar.pack(side="right", fill="y", pady=5, padx=(0, 5))
     
     def create_bookings_table(self):
         """Create bookings table"""
+        # Table header
+        header_frame = ctk.CTkFrame(self.tab_bookings, fg_color="#252545", corner_radius=10, height=40)
+        header_frame.pack(fill="x", padx=10, pady=(10, 5))
+        header_frame.pack_propagate(False)
+        
+        ctk.CTkLabel(
+            header_frame,
+            text="📅 Booking Records",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color="#00d4ff"
+        ).pack(side="left", padx=15, pady=8)
+        
+        # Table container
+        table_container = ctk.CTkFrame(self.tab_bookings, fg_color="#1a1a2e", corner_radius=10)
+        table_container.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        
         columns = ('customer', 'category', 'date', 'amount', 'advance', 'status')
         
         self.bookings_tree = ttk.Treeview(
-            self.tab_bookings,
+            table_container,
             columns=columns,
             show='headings',
             height=12
         )
         
-        self.bookings_tree.heading('customer', text='Customer')
-        self.bookings_tree.heading('category', text='Category')
-        self.bookings_tree.heading('date', text='Booking Date')
-        self.bookings_tree.heading('amount', text='Amount (LKR)')
-        self.bookings_tree.heading('advance', text='Advance (LKR)')
-        self.bookings_tree.heading('status', text='Status')
+        self.bookings_tree.heading('customer', text='👤 Customer')
+        self.bookings_tree.heading('category', text='📁 Category')
+        self.bookings_tree.heading('date', text='📅 Date')
+        self.bookings_tree.heading('amount', text='💰 Amount')
+        self.bookings_tree.heading('advance', text='💵 Advance')
+        self.bookings_tree.heading('status', text='📊 Status')
         
         self.bookings_tree.column('customer', width=150, anchor='w')
         self.bookings_tree.column('category', width=120, anchor='w')
@@ -291,36 +327,60 @@ class StaffReportsFrame(ctk.CTkFrame):
         self.bookings_tree.column('advance', width=100, anchor='e')
         self.bookings_tree.column('status', width=80, anchor='center')
         
-        scrollbar = ttk.Scrollbar(self.tab_bookings, orient="vertical", command=self.bookings_tree.yview)
+        # Configure row tags
+        self.bookings_tree.tag_configure('oddrow', background='#1e1e3f', foreground='#e0e0e0')
+        self.bookings_tree.tag_configure('evenrow', background='#252545', foreground='#e0e0e0')
+        
+        scrollbar = ttk.Scrollbar(table_container, orient="vertical", command=self.bookings_tree.yview)
         self.bookings_tree.configure(yscrollcommand=scrollbar.set)
         
-        self.bookings_tree.pack(side="left", fill="both", expand=True, padx=(10, 0), pady=10)
-        scrollbar.pack(side="right", fill="y", pady=10, padx=(0, 10))
+        self.bookings_tree.pack(side="left", fill="both", expand=True, padx=(5, 0), pady=5)
+        scrollbar.pack(side="right", fill="y", pady=5, padx=(0, 5))
     
     def create_customers_table(self):
         """Create customers table"""
+        # Table header
+        header_frame = ctk.CTkFrame(self.tab_customers, fg_color="#252545", corner_radius=10, height=40)
+        header_frame.pack(fill="x", padx=10, pady=(10, 5))
+        header_frame.pack_propagate(False)
+        
+        ctk.CTkLabel(
+            header_frame,
+            text="👥 Customer Records",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color="#00d4ff"
+        ).pack(side="left", padx=15, pady=8)
+        
+        # Table container
+        table_container = ctk.CTkFrame(self.tab_customers, fg_color="#1a1a2e", corner_radius=10)
+        table_container.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        
         columns = ('name', 'mobile', 'added_at')
         
         self.customers_tree = ttk.Treeview(
-            self.tab_customers,
+            table_container,
             columns=columns,
             show='headings',
             height=12
         )
         
-        self.customers_tree.heading('name', text='Customer Name')
-        self.customers_tree.heading('mobile', text='Mobile Number')
-        self.customers_tree.heading('added_at', text='Added At')
+        self.customers_tree.heading('name', text='👤 Customer Name')
+        self.customers_tree.heading('mobile', text='📱 Mobile Number')
+        self.customers_tree.heading('added_at', text='📅 Added At')
         
         self.customers_tree.column('name', width=200, anchor='w')
         self.customers_tree.column('mobile', width=150, anchor='center')
         self.customers_tree.column('added_at', width=150, anchor='center')
         
-        scrollbar = ttk.Scrollbar(self.tab_customers, orient="vertical", command=self.customers_tree.yview)
+        # Configure row tags
+        self.customers_tree.tag_configure('oddrow', background='#1e1e3f', foreground='#e0e0e0')
+        self.customers_tree.tag_configure('evenrow', background='#252545', foreground='#e0e0e0')
+        
+        scrollbar = ttk.Scrollbar(table_container, orient="vertical", command=self.customers_tree.yview)
         self.customers_tree.configure(yscrollcommand=scrollbar.set)
         
-        self.customers_tree.pack(side="left", fill="both", expand=True, padx=(10, 0), pady=10)
-        scrollbar.pack(side="right", fill="y", pady=10, padx=(0, 10))
+        self.customers_tree.pack(side="left", fill="both", expand=True, padx=(5, 0), pady=5)
+        scrollbar.pack(side="right", fill="y", pady=5, padx=(0, 5))
     
     def load_users(self):
         """Load all users into dropdown"""

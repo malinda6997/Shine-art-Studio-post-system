@@ -111,7 +111,7 @@ class ProfileFrame(ctk.CTkFrame):
         self.username_detail = self.create_detail_row(details_frame, "Username:", "")
         self.role_detail = self.create_detail_row(details_frame, "Role:", "")
         self.status_detail = self.create_detail_row(details_frame, "Status:", "Active")
-        self.last_login_detail = self.create_detail_row(details_frame, "Last Login:", "")
+        self.last_login_detail = self.create_detail_row(details_frame, "Recent Login:", "")
         
         # Change Password Section - Full width
         password_section = ctk.CTkFrame(main_scroll, fg_color="#1e1e3f", corner_radius=15)
