@@ -127,6 +127,7 @@ class DatabaseSchema:
             CREATE TABLE IF NOT EXISTS invoices (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 invoice_number TEXT UNIQUE NOT NULL,
+                booking_id INTEGER,
                 customer_id INTEGER,
                 guest_name TEXT,
                 subtotal REAL NOT NULL,
@@ -138,6 +139,7 @@ class DatabaseSchema:
                 balance_amount REAL NOT NULL,
                 created_by INTEGER NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (booking_id) REFERENCES bookings (id),
                 FOREIGN KEY (customer_id) REFERENCES customers (id),
                 FOREIGN KEY (created_by) REFERENCES users (id)
             )
@@ -158,6 +160,12 @@ class DatabaseSchema:
         # Add advance_payment column if not exists
         try:
             self.cursor.execute('ALTER TABLE invoices ADD COLUMN advance_payment REAL DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass
+        
+        # Add booking_id column if not exists
+        try:
+            self.cursor.execute('ALTER TABLE invoices ADD COLUMN booking_id INTEGER')
         except sqlite3.OperationalError:
             pass
         
@@ -185,6 +193,41 @@ class DatabaseSchema:
             self.cursor.execute('ALTER TABLE invoice_items ADD COLUMN buying_price REAL DEFAULT 0')
         except sqlite3.OperationalError:
             pass
+        
+        # Bills table (thermal receipts for normal sales - no booking)
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS bills (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                bill_number TEXT UNIQUE NOT NULL,
+                customer_id INTEGER,
+                guest_name TEXT,
+                subtotal REAL NOT NULL,
+                discount REAL DEFAULT 0,
+                service_charge REAL DEFAULT 0,
+                total_amount REAL NOT NULL,
+                cash_given REAL DEFAULT 0,
+                created_by INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (customer_id) REFERENCES customers (id),
+                FOREIGN KEY (created_by) REFERENCES users (id)
+            )
+        ''')
+        
+        # Bill items table
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS bill_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                bill_id INTEGER NOT NULL,
+                item_type TEXT NOT NULL CHECK(item_type IN ('Service', 'Frame', 'CategoryService')),
+                item_id INTEGER NOT NULL,
+                item_name TEXT NOT NULL,
+                quantity INTEGER NOT NULL DEFAULT 1,
+                unit_price REAL NOT NULL,
+                total_price REAL NOT NULL,
+                buying_price REAL DEFAULT 0,
+                FOREIGN KEY (bill_id) REFERENCES bills (id)
+            )
+        ''')
         
         # Bookings table
         self.cursor.execute('''
@@ -295,51 +338,74 @@ class DatabaseSchema:
         self.close()
     
     def _migrate_invoices_table(self):
-        """Migrate invoices table to allow NULL customer_id for guest customers"""
+        """Migrate invoices table to allow NULL customer_id for guest customers and add booking_id"""
         try:
             # Check if customer_id column has NOT NULL constraint
             self.cursor.execute("PRAGMA table_info(invoices)")
             columns = self.cursor.fetchall()
             
+            needs_migration = False
+            has_booking_id = False
+            
             for col in columns:
-                # col format: (cid, name, type, notnull, dflt_value, pk)
-                if col[1] == 'customer_id' and col[3] == 1:  # notnull = 1 means NOT NULL
-                    # Need to recreate table without NOT NULL on customer_id
-                    self.cursor.execute('''
-                        CREATE TABLE IF NOT EXISTS invoices_new (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            invoice_number TEXT UNIQUE NOT NULL,
-                            customer_id INTEGER,
-                            guest_name TEXT,
-                            subtotal REAL NOT NULL,
-                            discount REAL DEFAULT 0,
-                            category_service_cost REAL DEFAULT 0,
-                            advance_payment REAL DEFAULT 0,
-                            total_amount REAL NOT NULL,
-                            paid_amount REAL NOT NULL,
-                            balance_amount REAL NOT NULL,
-                            created_by INTEGER NOT NULL,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            FOREIGN KEY (customer_id) REFERENCES customers (id),
-                            FOREIGN KEY (created_by) REFERENCES users (id)
-                        )
-                    ''')
-                    
-                    # Copy existing data
+                if col[1] == 'customer_id' and col[3] == 1:
+                    needs_migration = True
+                if col[1] == 'booking_id':
+                    has_booking_id = True
+            
+            if needs_migration or not has_booking_id:
+                # Need to recreate table
+                self.cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS invoices_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        invoice_number TEXT UNIQUE NOT NULL,
+                        booking_id INTEGER,
+                        customer_id INTEGER,
+                        guest_name TEXT,
+                        subtotal REAL NOT NULL,
+                        discount REAL DEFAULT 0,
+                        category_service_cost REAL DEFAULT 0,
+                        advance_payment REAL DEFAULT 0,
+                        total_amount REAL NOT NULL,
+                        paid_amount REAL NOT NULL,
+                        balance_amount REAL NOT NULL,
+                        created_by INTEGER NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (booking_id) REFERENCES bookings (id),
+                        FOREIGN KEY (customer_id) REFERENCES customers (id),
+                        FOREIGN KEY (created_by) REFERENCES users (id)
+                    )
+                ''')
+                
+                # Copy existing data - handle missing columns
+                try:
                     self.cursor.execute('''
                         INSERT INTO invoices_new 
-                        SELECT id, invoice_number, customer_id, guest_name, subtotal, 
+                        SELECT id, invoice_number, 
+                               NULL as booking_id,
+                               customer_id, guest_name, subtotal, 
                                discount, category_service_cost, advance_payment, 
                                total_amount, paid_amount, balance_amount, created_by, created_at
                         FROM invoices
                     ''')
-                    
-                    # Drop old table and rename new one
-                    self.cursor.execute('DROP TABLE invoices')
-                    self.cursor.execute('ALTER TABLE invoices_new RENAME TO invoices')
-                    self.conn.commit()
-                    print("Migrated invoices table to allow guest customers")
-                    break
+                except sqlite3.OperationalError:
+                    # Fallback for older schemas
+                    try:
+                        self.cursor.execute('''
+                            INSERT INTO invoices_new (id, invoice_number, customer_id, subtotal, 
+                                   discount, total_amount, paid_amount, balance_amount, created_by, created_at)
+                            SELECT id, invoice_number, customer_id, subtotal, 
+                                   discount, total_amount, paid_amount, balance_amount, created_by, created_at
+                            FROM invoices
+                        ''')
+                    except:
+                        pass
+                
+                # Drop old table and rename new one
+                self.cursor.execute('DROP TABLE invoices')
+                self.cursor.execute('ALTER TABLE invoices_new RENAME TO invoices')
+                self.conn.commit()
+                print("Migrated invoices table successfully")
         except sqlite3.Error as e:
             print(f"Migration check: {e}")
         
@@ -347,8 +413,9 @@ class DatabaseSchema:
         """Drop all tables and recreate (use with caution)"""
         self.connect()
         
-        tables = ['invoice_items', 'invoices', 'bookings', 'photo_frames', 
-                  'services', 'categories', 'customers', 'users']
+        tables = ['bill_items', 'bills', 'invoice_items', 'invoices', 'bookings', 
+                  'photo_frames', 'services', 'categories', 'customers', 
+                  'user_permissions', 'users']
         
         for table in tables:
             self.cursor.execute(f'DROP TABLE IF EXISTS {table}')

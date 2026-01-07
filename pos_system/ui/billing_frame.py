@@ -1,7 +1,7 @@
 import customtkinter as ctk
 from tkinter import ttk
 from ui.components import BaseFrame, MessageDialog
-from services import InvoiceGenerator
+from services import InvoiceGenerator, BillGenerator
 
 
 class BillingFrame(BaseFrame):
@@ -10,6 +10,7 @@ class BillingFrame(BaseFrame):
     def __init__(self, parent, auth_manager, db_manager):
         super().__init__(parent, auth_manager, db_manager)
         self.invoice_generator = InvoiceGenerator()
+        self.bill_generator = BillGenerator()
         self.selected_customer = None
         self.is_guest_customer = False
         self.guest_customer_name = ""
@@ -23,6 +24,7 @@ class BillingFrame(BaseFrame):
         self.selected_category_id = None
         self.free_service_name = None
         self.payment_type = "full"  # 'full' or 'advance'
+        self.booking_reference = None  # For linking to booking
         self.create_widgets()
         self.load_categories()
 
@@ -483,11 +485,11 @@ class BillingFrame(BaseFrame):
         action_btn_frame = ctk.CTkFrame(right_panel, fg_color="transparent")
         action_btn_frame.pack(fill="x", padx=20, pady=30)
 
-        # Generate Bill button
+        # Generate Bill button (for normal sales - NO booking)
         ctk.CTkButton(
             action_btn_frame,
             text="💵 Generate Bill",
-            command=self.generate_invoice,
+            command=self.generate_bill,
             width=150,
             height=45,
             font=ctk.CTkFont(size=14, weight="bold"),
@@ -1449,8 +1451,8 @@ class BillingFrame(BaseFrame):
         else:
             self.balance_label.configure(text_color="#00ff88")
 
-    def generate_invoice(self):
-        """Generate and save invoice"""
+    def generate_bill(self):
+        """Generate thermal bill receipt for normal sales (NO booking)"""
         # Validate customer selection
         if self.is_guest_customer:
             if not self.guest_customer_name:
@@ -1466,54 +1468,32 @@ class BillingFrame(BaseFrame):
             MessageDialog.show_error("Error", "Please add items to cart")
             return
 
-        # Validate cash received (only for display, optional)
-        cash_received_str = self.paid_entry.get().strip()
-        cash_received = 0.0
-        if cash_received_str:
-            if not self.validate_number(cash_received_str, True):
-                MessageDialog.show_error("Error", "Please enter valid cash received amount")
-                return
-            cash_received = float(cash_received_str)
-            if cash_received < 0:
-                MessageDialog.show_error("Error", "Cash received cannot be negative")
-                return
-
         # Calculate totals
         subtotal = sum(item['total'] for item in self.cart_items)
         discount = float(self.discount_entry.get() or 0)
 
-        service_cost = 0
+        service_charge = 0
         if self.category_service_cost > 0 and any(item['type'] == 'Service' for item in self.cart_items):
-            service_cost = self.category_service_cost
+            service_charge = self.category_service_cost
 
-        total = max(0, subtotal + service_cost - discount)
+        total = max(0, subtotal + service_charge - discount)
 
-        # Payment type logic
-        if self.payment_type == "full":
-            # Full payment - customer pays everything
-            advance = 0.0
-            paid_amount = total
-            balance = 0.0
-        else:
-            # Advance payment
-            advance_str = self.advance_entry.get().strip()
-            if not advance_str or not self.validate_number(advance_str, True):
-                MessageDialog.show_error("Error", "Please enter valid advance amount")
+        # Get cash given (optional, for display only)
+        cash_given_str = self.paid_entry.get().strip()
+        cash_given = 0.0
+        if cash_given_str:
+            if not self.validate_number(cash_given_str, True):
+                MessageDialog.show_error("Error", "Please enter valid cash amount")
                 return
-            advance = float(advance_str)
+            cash_given = float(cash_given_str)
 
-            # Validate advance amount
-            if advance < 0:
-                MessageDialog.show_error("Error", "Advance amount cannot be negative")
-                return
-            if advance > total:
-                MessageDialog.show_error("Error", "Advance amount cannot exceed total amount")
-                return
+        # For bills, payment must be full (no advance payment)
+        # Bills are for normal sales, not bookings
+        if self.payment_type == "advance":
+            MessageDialog.show_error("Error", "Bills do not support advance payment. Use full payment or create a booking for advance payments.")
+            return
 
-            paid_amount = advance
-            balance = max(0, total - advance)
-
-        invoice_number = self.db_manager.generate_invoice_number()
+        bill_number = self.db_manager.generate_bill_number()
 
         if self.is_guest_customer:
             customer_id = None
@@ -1522,24 +1502,24 @@ class BillingFrame(BaseFrame):
             customer_id = self.selected_customer['id']
             guest_name = None
 
-        invoice_id = self.db_manager.create_invoice(
-            invoice_number,
+        # Create bill in database
+        bill_id = self.db_manager.create_bill(
+            bill_number,
             customer_id,
             subtotal,
             discount,
             total,
-            paid_amount,
-            balance,
             self.auth_manager.get_user_id(),
-            service_cost,
-            advance,
+            service_charge,
+            cash_given,
             guest_name
         )
 
-        if not invoice_id:
-            MessageDialog.show_error("Error", "Failed to create invoice")
+        if not bill_id:
+            MessageDialog.show_error("Error", "Failed to create bill")
             return
 
+        # Add items to bill
         for item in self.cart_items:
             buying_price = 0
             if item['type'] == 'Frame':
@@ -1547,8 +1527,8 @@ class BillingFrame(BaseFrame):
                 if frame_data:
                     buying_price = frame_data.get('buying_price', 0) or 0
 
-            self.db_manager.add_invoice_item(
-                invoice_id,
+            self.db_manager.add_bill_item(
+                bill_id,
                 item['type'],
                 item['id'],
                 item['name'],
@@ -1558,23 +1538,26 @@ class BillingFrame(BaseFrame):
                 buying_price * item['quantity']
             )
 
+            # Update frame stock
             if item['type'] == 'Frame':
                 self.db_manager.update_frame_quantity(item['id'], -item['quantity'])
 
-        if service_cost > 0 and self.selected_category_name:
-            self.db_manager.add_invoice_item(
-                invoice_id,
+        # Add service charge as separate item
+        if service_charge > 0 and self.selected_category_name:
+            self.db_manager.add_bill_item(
+                bill_id,
                 'CategoryService',
                 0,
                 f"Service Charge - {self.selected_category_name}",
                 1,
-                service_cost,
-                service_cost,
+                service_charge,
+                service_charge,
                 0
             )
 
-        invoice_data = self.db_manager.get_invoice_by_id(invoice_id)
-        items_data = self.db_manager.get_invoice_items(invoice_id)
+        # Generate PDF bill
+        bill_data = self.db_manager.get_bill_by_id(bill_id)
+        items_data = self.db_manager.get_bill_items(bill_id)
 
         if self.is_guest_customer:
             customer_data = {
@@ -1585,18 +1568,24 @@ class BillingFrame(BaseFrame):
             customer_data = self.selected_customer
 
         try:
-            pdf_path = self.invoice_generator.generate_invoice(
-                invoice_data,
+            pdf_path = self.bill_generator.generate_bill(
+                bill_data,
                 items_data,
                 customer_data
             )
 
-            MessageDialog.show_success("Success", f"Invoice {invoice_number} generated successfully!")
-            self.invoice_generator.open_invoice(pdf_path)
+            MessageDialog.show_success("Success", f"Bill {bill_number} generated successfully!")
+            self.bill_generator.open_bill(pdf_path)
             self.clear_all()
 
         except Exception as e:
-            MessageDialog.show_error("Error", f"Failed to generate PDF: {str(e)}")
+            MessageDialog.show_error("Error", f"Failed to generate bill PDF: {str(e)}")
+
+    def generate_invoice_from_booking(self, booking_id):
+        """Generate A4 invoice for a booking - called from booking frame"""
+        # This method can be called externally when completing a booking
+        # Load booking data and generate invoice
+        pass
 
     def clear_all(self):
         """Clear all fields"""
@@ -1609,6 +1598,7 @@ class BillingFrame(BaseFrame):
         self.selected_category_id = None
         self.free_service_name = None
         self.payment_type = "full"
+        self.booking_reference = None
         self.mobile_search.delete(0, 'end')
         self.guest_name_entry.delete(0, 'end')
 
@@ -1640,3 +1630,18 @@ class BillingFrame(BaseFrame):
         self.frames_map = {}
         self.refresh_cart()
         self.calculate_totals()
+    
+    def validate_mobile(self, mobile):
+        """Validate mobile number format"""
+        return mobile.isdigit() and len(mobile) == 10
+    
+    def validate_number(self, value, allow_float=False):
+        """Validate numeric input"""
+        try:
+            if allow_float:
+                float(value)
+            else:
+                int(value)
+            return True
+        except ValueError:
+            return False
