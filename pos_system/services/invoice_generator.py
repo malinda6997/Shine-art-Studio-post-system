@@ -187,3 +187,259 @@ class InvoiceGenerator:
         except Exception as e:
             print(f"Error opening invoice: {e}")
             return False
+    
+    def generate_booking_invoice(self, booking_data, created_by_name):
+        """Generate PDF invoice for a booking/photoshoot"""
+        
+        # Create booking invoice number
+        timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+        invoice_number = f"BK-{timestamp}"
+        
+        # Create filename
+        filename = f"Booking_{invoice_number}.pdf"
+        filepath = os.path.join(self.invoice_folder, filename)
+        
+        # Create PDF document
+        doc = SimpleDocTemplate(filepath, pagesize=A4)
+        story = []
+        
+        # Styles
+        styles = getSampleStyleSheet()
+        
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=26,
+            textColor=colors.HexColor('#1a1a2e'),
+            spaceAfter=10,
+            alignment=TA_CENTER
+        )
+        
+        subtitle_style = ParagraphStyle(
+            'Subtitle',
+            parent=styles['Normal'],
+            fontSize=12,
+            textColor=colors.HexColor('#666666'),
+            alignment=TA_CENTER,
+            spaceAfter=25
+        )
+        
+        heading_style = ParagraphStyle(
+            'CustomHeading',
+            parent=styles['Heading2'],
+            fontSize=14,
+            textColor=colors.HexColor('#1a1a2e'),
+            spaceAfter=12,
+            spaceBefore=15
+        )
+        
+        normal_style = styles["Normal"]
+        
+        # Header - Studio name with styling
+        story.append(Paragraph("✨ Shine Art Studio ✨", title_style))
+        story.append(Paragraph("Professional Photography Services", subtitle_style))
+        
+        # Divider line
+        divider_table = Table([['']], colWidths=[7*inch])
+        divider_table.setStyle(TableStyle([
+            ('LINEABOVE', (0, 0), (-1, 0), 2, colors.HexColor('#00d4ff')),
+        ]))
+        story.append(divider_table)
+        story.append(Spacer(1, 0.2 * inch))
+        
+        # Booking Receipt Header
+        receipt_header = ParagraphStyle(
+            'ReceiptHeader',
+            parent=styles['Heading1'],
+            fontSize=18,
+            textColor=colors.HexColor('#00d4ff'),
+            alignment=TA_CENTER,
+            spaceAfter=20
+        )
+        story.append(Paragraph("📋 BOOKING RECEIPT", receipt_header))
+        
+        # Invoice info box
+        invoice_info = [
+            [Paragraph(f"<b>Receipt No:</b> {invoice_number}", normal_style),
+             Paragraph(f"<b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M')}", normal_style)],
+            [Paragraph(f"<b>Created By:</b> {created_by_name}", normal_style),
+             Paragraph(f"<b>Status:</b> <font color='#ffd93d'>BOOKED</font>", normal_style)]
+        ]
+        
+        info_table = Table(invoice_info, colWidths=[3.5*inch, 3.5*inch])
+        info_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f5f5f5')),
+            ('BOX', (0, 0), (-1, -1), 1, colors.HexColor('#1a1a2e')),
+            ('TOPPADDING', (0, 0), (-1, -1), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+            ('LEFTPADDING', (0, 0), (-1, -1), 15),
+        ]))
+        story.append(info_table)
+        story.append(Spacer(1, 0.3 * inch))
+        
+        # Customer details section
+        story.append(Paragraph("👤 Customer Details", heading_style))
+        
+        customer_data = [
+            ['Customer Name:', booking_data['customer_name']],
+            ['Mobile Number:', booking_data['mobile_number']],
+        ]
+        
+        customer_table = Table(customer_data, colWidths=[2*inch, 5*inch])
+        customer_table.setStyle(TableStyle([
+            ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 11),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+            ('TOPPADDING', (0, 0), (-1, -1), 8),
+            ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#1a1a2e')),
+        ]))
+        story.append(customer_table)
+        story.append(Spacer(1, 0.2 * inch))
+        
+        # Booking details section
+        story.append(Paragraph("📸 Booking Details", heading_style))
+        
+        # Parse category and service
+        photoshoot_cat = booking_data['photoshoot_category']
+        if ' - ' in photoshoot_cat:
+            parts = photoshoot_cat.split(' - ', 1)
+            category = parts[0]
+            service = parts[1] if len(parts) > 1 else 'N/A'
+        else:
+            category = photoshoot_cat
+            service = 'N/A'
+        
+        booking_details = [
+            ['Category:', category],
+            ['Service:', service],
+            ['Booking Date:', booking_data['booking_date']],
+            ['Location:', booking_data.get('location', 'N/A') or 'N/A'],
+        ]
+        
+        if booking_data.get('description'):
+            booking_details.append(['Description:', booking_data['description']])
+        
+        booking_table = Table(booking_details, colWidths=[2*inch, 5*inch])
+        booking_table.setStyle(TableStyle([
+            ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 11),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+            ('TOPPADDING', (0, 0), (-1, -1), 8),
+            ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#1a1a2e')),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ]))
+        story.append(booking_table)
+        story.append(Spacer(1, 0.3 * inch))
+        
+        # Payment details section
+        story.append(Paragraph("💰 Payment Summary", heading_style))
+        
+        full_amount = float(booking_data['full_amount'])
+        advance_payment = float(booking_data['advance_payment'])
+        balance = full_amount - advance_payment
+        
+        payment_data = [
+            ['Full Amount:', f"LKR {full_amount:,.2f}"],
+            ['Advance Paid:', f"LKR {advance_payment:,.2f}"],
+        ]
+        
+        payment_table = Table(payment_data, colWidths=[3*inch, 2.5*inch])
+        payment_table.setStyle(TableStyle([
+            ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+            ('TOPPADDING', (0, 0), (-1, -1), 10),
+            ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+            ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#1a1a2e')),
+        ]))
+        story.append(payment_table)
+        
+        # Balance due box
+        if balance > 0:
+            balance_color = colors.HexColor('#ff6b6b')
+            balance_text = f"BALANCE DUE: LKR {balance:,.2f}"
+        else:
+            balance_color = colors.HexColor('#00ff88')
+            balance_text = "FULLY PAID"
+        
+        balance_data = [[Paragraph(f"<b>{balance_text}</b>", ParagraphStyle(
+            'Balance',
+            parent=normal_style,
+            fontSize=14,
+            textColor=colors.white,
+            alignment=TA_CENTER
+        ))]]
+        
+        balance_table = Table(balance_data, colWidths=[5.5*inch])
+        balance_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), balance_color),
+            ('TOPPADDING', (0, 0), (-1, -1), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('BOX', (0, 0), (-1, -1), 2, balance_color),
+        ]))
+        story.append(Spacer(1, 0.2 * inch))
+        story.append(balance_table)
+        story.append(Spacer(1, 0.4 * inch))
+        
+        # Terms and conditions
+        terms_style = ParagraphStyle(
+            'Terms',
+            parent=normal_style,
+            fontSize=9,
+            textColor=colors.HexColor('#666666'),
+            spaceAfter=5
+        )
+        
+        story.append(Paragraph("<b>Terms & Conditions:</b>", terms_style))
+        story.append(Paragraph("• Advance payment is non-refundable.", terms_style))
+        story.append(Paragraph("• Please arrive 15 minutes before your scheduled time.", terms_style))
+        story.append(Paragraph("• Rescheduling must be done 24 hours in advance.", terms_style))
+        story.append(Paragraph("• Balance payment is due on the day of the photoshoot.", terms_style))
+        
+        story.append(Spacer(1, 0.4 * inch))
+        
+        # Divider
+        story.append(divider_table)
+        story.append(Spacer(1, 0.2 * inch))
+        
+        # Footer
+        footer_style = ParagraphStyle(
+            'Footer',
+            parent=normal_style,
+            fontSize=10,
+            alignment=TA_CENTER,
+            textColor=colors.HexColor('#1a1a2e')
+        )
+        
+        story.append(Paragraph("Thank you for choosing Shine Art Studio! 📷", footer_style))
+        story.append(Paragraph("We look forward to capturing your special moments.", ParagraphStyle(
+            'FooterSub',
+            parent=normal_style,
+            fontSize=9,
+            alignment=TA_CENTER,
+            textColor=colors.HexColor('#888888')
+        )))
+        
+        # Build PDF
+        doc.build(story)
+        
+        return filepath
+    
+    def print_invoice(self, filepath):
+        """Print the invoice using system default printer"""
+        try:
+            import subprocess
+            import platform
+            
+            if platform.system() == 'Windows':
+                # Use Windows print command
+                os.startfile(filepath, 'print')
+                return True
+            else:
+                # For Linux/Mac
+                subprocess.run(['lpr', filepath])
+                return True
+        except Exception as e:
+            print(f"Error printing invoice: {e}")
+            return False
