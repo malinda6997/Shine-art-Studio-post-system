@@ -286,6 +286,101 @@ class BookingManagementFrame(BaseFrame):
             height=35
         ).pack(side="left", padx=5)
         
+        # Status filter buttons
+        self.filter_status = ctk.StringVar(value="All")
+        
+        ctk.CTkLabel(search_frame, text="|", font=ctk.CTkFont(size=13)).pack(side="left", padx=5)
+        ctk.CTkLabel(search_frame, text="Status:", font=ctk.CTkFont(size=13, weight="bold")).pack(side="left", padx=5)
+        
+        ctk.CTkButton(
+            search_frame,
+            text="All",
+            command=lambda: self.filter_by_status("All"),
+            width=70,
+            height=35,
+            fg_color="#2d2d5a",
+            hover_color="#3d3d7a"
+        ).pack(side="left", padx=2)
+        
+        ctk.CTkButton(
+            search_frame,
+            text="Pending",
+            command=lambda: self.filter_by_status("Pending"),
+            width=80,
+            height=35,
+            fg_color="#ffa500",
+            text_color="black",
+            hover_color="#ff8c00"
+        ).pack(side="left", padx=2)
+        
+        ctk.CTkButton(
+            search_frame,
+            text="Completed",
+            command=lambda: self.filter_by_status("Completed"),
+            width=90,
+            height=35,
+            fg_color="#00ff88",
+            text_color="black",
+            hover_color="#00cc66"
+        ).pack(side="left", padx=2)
+        
+        ctk.CTkButton(
+            search_frame,
+            text="Cancelled",
+            command=lambda: self.filter_by_status("Cancelled"),
+            width=85,
+            height=35,
+            fg_color="#ff4757",
+            hover_color="#ff3344"
+        ).pack(side="left", padx=2)
+        
+        # Status filter buttons
+        ctk.CTkLabel(search_frame, text="Status:", font=ctk.CTkFont(size=13, weight="bold")).pack(side="left", padx=(15, 5))
+        
+        self.filter_status = ctk.StringVar(value="All")
+        
+        ctk.CTkButton(
+            search_frame,
+            text="All",
+            command=lambda: self.filter_by_status("All"),
+            width=80,
+            height=35,
+            fg_color="#2d2d5a",
+            hover_color="#3d3d7a"
+        ).pack(side="left", padx=2)
+        
+        ctk.CTkButton(
+            search_frame,
+            text="Pending",
+            command=lambda: self.filter_by_status("Pending"),
+            width=80,
+            height=35,
+            fg_color="#ffa500",
+            hover_color="#ff8c00",
+            text_color="#1a1a2e"
+        ).pack(side="left", padx=2)
+        
+        ctk.CTkButton(
+            search_frame,
+            text="Completed",
+            command=lambda: self.filter_by_status("Completed"),
+            width=90,
+            height=35,
+            fg_color="#00ff88",
+            hover_color="#00dd77",
+            text_color="#1a1a2e"
+        ).pack(side="left", padx=2)
+        
+        ctk.CTkButton(
+            search_frame,
+            text="Cancelled",
+            command=lambda: self.filter_by_status("Cancelled"),
+            width=90,
+            height=35,
+            fg_color="#ff4444",
+            hover_color="#cc0000"
+        ).pack(side="left", padx=2)
+        
         # Table header
         table_header = ctk.CTkFrame(right_panel, fg_color="#252545", corner_radius=10, height=45)
         table_header.pack(fill="x", padx=15, pady=(0, 5))
@@ -971,6 +1066,55 @@ class BookingManagementFrame(BaseFrame):
             elif status == 'Cancelled':
                 tag = 'cancelled'
             elif status == 'Pending':
+                tag = 'pending'
+            else:
+                tag = 'evenrow' if i % 2 == 0 else 'oddrow'
+            
+            # Split photoshoot_category into category and service
+            photoshoot_cat = booking['photoshoot_category']
+            if ' - ' in photoshoot_cat:
+                parts = photoshoot_cat.split(' - ', 1)
+                category = parts[0]
+                service = parts[1] if len(parts) > 1 else ''
+            else:
+                category = photoshoot_cat
+                service = ''
+            
+            self.tree.insert("", "end", values=(
+                booking['id'],
+                booking['customer_name'],
+                booking['mobile_number'],
+                category,
+                service,
+                f"{booking['full_amount']:.2f}",
+                booking['booking_date'],
+                booking['status']
+            ), tags=(tag,))
+        
+        # Update record count
+        self.record_count_label.configure(text=f"{len(bookings)} records")
+    
+    def filter_by_status(self, status):
+        """Filter bookings by status"""
+        self.filter_status.set(status)
+        
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+        
+        # Get all bookings
+        bookings = self.db_manager.get_all_bookings()
+        
+        # Filter by status
+        if status != "All":
+            bookings = [b for b in bookings if b['status'] == status]
+        
+        for i, booking in enumerate(bookings):
+            booking_status = booking['status']
+            if booking_status == 'Completed':
+                tag = 'completed'
+            elif booking_status == 'Cancelled':
+                tag = 'cancelled'
+            elif booking_status == 'Pending':
                 tag = 'pending'
             else:
                 tag = 'evenrow' if i % 2 == 0 else 'oddrow'

@@ -14,6 +14,7 @@ from ui.frame_frame import FrameManagementFrame
 from ui.billing_frame import BillingFrame
 from ui.booking_frame import BookingManagementFrame
 from ui.invoice_history_frame import InvoiceHistoryFrame
+from ui.bill_history_frame import BillHistoryFrame
 from ui.dashboard_frame import DashboardFrame
 from ui.users_frame import UsersManagementFrame
 from ui.settings_frame import SettingsFrame
@@ -301,6 +302,7 @@ class MainApplication(ctk.CTk):
             "frames": FrameManagementFrame,
             "bookings": BookingManagementFrame,
             "invoices": InvoiceHistoryFrame,
+            "bills": BillHistoryFrame,
             "users": UsersManagementFrame,
             "permissions": PermissionsFrame,
             "staff_reports": StaffReportsFrame,
