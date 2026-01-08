@@ -67,6 +67,30 @@ class InvoiceHistoryFrame(BaseFrame):
             hover_color="#00a8cc"
         ).pack(side="left", padx=10)
         
+        # Admin-only delete buttons
+        if self.auth_manager.current_user and self.auth_manager.current_user.get('role') == 'Admin':
+            ctk.CTkButton(
+                controls_frame,
+                text="Delete Selected",
+                command=self.delete_selected_invoice,
+                width=140,
+                height=35,
+                fg_color="#ff4444",
+                text_color="white",
+                hover_color="#cc0000"
+            ).pack(side="left", padx=10)
+            
+            ctk.CTkButton(
+                controls_frame,
+                text="Delete All",
+                command=self.delete_all_invoices,
+                width=120,
+                height=35,
+                fg_color="#aa0000",
+                text_color="white",
+                hover_color="#880000"
+            ).pack(side="left", padx=10)
+        
         # Invoices table
         table_frame = ctk.CTkFrame(self, fg_color="#1e1e3f", corner_radius=15)
         table_frame.pack(fill="both", expand=True, padx=20, pady=(0, 20))
@@ -95,24 +119,26 @@ class InvoiceHistoryFrame(BaseFrame):
         table_container = ctk.CTkFrame(table_frame, fg_color="#1a1a2e", corner_radius=10)
         table_container.pack(fill="both", expand=True, padx=10, pady=(0, 10))
         
-        columns = ("Invoice #", "Date", "Customer", "Mobile", "Total", "Paid", "Balance")
+        columns = ("Invoice #", "Date", "Customer", "Mobile", "Service", "Total", "Paid", "Balance")
         self.tree = ttk.Treeview(table_container, columns=columns, show="headings", height=18)
         
         self.tree.heading("Invoice #", text="🔢 Invoice #")
         self.tree.heading("Date", text="📅 Date")
         self.tree.heading("Customer", text="👤 Customer")
         self.tree.heading("Mobile", text="📱 Mobile")
+        self.tree.heading("Service", text="📸 Service")
         self.tree.heading("Total", text="💰 Total (LKR)")
         self.tree.heading("Paid", text="✅ Paid (LKR)")
         self.tree.heading("Balance", text="⏳ Balance (LKR)")
         
         self.tree.column("Invoice #", width=120, anchor="center")
-        self.tree.column("Date", width=150)
-        self.tree.column("Customer", width=200)
-        self.tree.column("Mobile", width=120, anchor="center")
-        self.tree.column("Total", width=120, anchor="e")
-        self.tree.column("Paid", width=120, anchor="e")
-        self.tree.column("Balance", width=120, anchor="e")
+        self.tree.column("Date", width=140)
+        self.tree.column("Customer", width=180)
+        self.tree.column("Mobile", width=110, anchor="center")
+        self.tree.column("Service", width=200)
+        self.tree.column("Total", width=110, anchor="e")
+        self.tree.column("Paid", width=110, anchor="e")
+        self.tree.column("Balance", width=110, anchor="e")
         
         # Configure row tags
         self.tree.tag_configure('oddrow', background='#1e1e3f', foreground='#e0e0e0')
@@ -145,11 +171,22 @@ class InvoiceHistoryFrame(BaseFrame):
             else:
                 tag = 'evenrow' if i % 2 == 0 else 'oddrow'
             
+            # Get service name from booking
+            service_name = 'N/A'
+            if invoice.get('booking_id'):
+                booking = self.db_manager.get_booking_by_id(invoice['booking_id'])
+                if booking:
+                    service_name = booking.get('photoshoot_category', 'N/A')
+                    # Remove "Category - " prefix if it exists
+                    if ' - ' in service_name:
+                        service_name = service_name.split(' - ', 1)[1]
+            
             self.tree.insert("", "end", values=(
                 invoice['invoice_number'],
                 invoice['created_at'],
                 invoice['full_name'],
                 invoice['mobile_number'],
+                service_name,
                 f"{invoice['total_amount']:.2f}",
                 f"{invoice['paid_amount']:.2f}",
                 f"{invoice['balance_amount']:.2f}"
@@ -180,11 +217,22 @@ class InvoiceHistoryFrame(BaseFrame):
             else:
                 tag = 'evenrow' if i % 2 == 0 else 'oddrow'
             
+            # Get service name from booking
+            service_name = 'N/A'
+            if invoice.get('booking_id'):
+                booking = self.db_manager.get_booking_by_id(invoice['booking_id'])
+                if booking:
+                    service_name = booking.get('photoshoot_category', 'N/A')
+                    # Remove "Category - " prefix if it exists
+                    if ' - ' in service_name:
+                        service_name = service_name.split(' - ', 1)[1]
+            
             self.tree.insert("", "end", values=(
                 invoice['invoice_number'],
                 invoice['created_at'],
                 invoice['full_name'],
                 invoice['mobile_number'],
+                service_name,
                 f"{invoice['total_amount']:.2f}",
                 f"{invoice['paid_amount']:.2f}",
                 f"{invoice['balance_amount']:.2f}"
@@ -377,3 +425,80 @@ Balance: LKR {invoice['balance_amount']:.2f}
             self.invoice_generator.open_invoice(pdf_path)
         except Exception as e:
             MessageDialog.show_error("Error", f"Failed to reprint invoice: {str(e)}")
+    
+    def delete_selected_invoice(self):
+        """Delete selected invoice (Admin only)"""
+        # Verify admin role
+        if not self.auth_manager.current_user or self.auth_manager.current_user.get('role') != 'Admin':
+            MessageDialog.show_error("Permission Denied", "Only administrators can delete invoices")
+            return
+        
+        selection = self.tree.selection()
+        if not selection:
+            MessageDialog.show_error("Error", "Please select an invoice to delete")
+            return
+        
+        item = self.tree.item(selection[0])
+        invoice_number = item['values'][0]
+        
+        # Confirm deletion
+        confirm = MessageDialog.show_confirm(
+            "Confirm Deletion",
+            f"Are you sure you want to delete invoice {invoice_number}?\nThis action cannot be undone!"
+        )
+        
+        if not confirm:
+            return
+        
+        invoice = self.db_manager.get_invoice_by_number(invoice_number)
+        if not invoice:
+            MessageDialog.show_error("Error", "Invoice not found")
+            return
+        
+        if self.db_manager.delete_invoice(invoice['id']):
+            MessageDialog.show_success("Success", f"Invoice {invoice_number} deleted successfully")
+            self.load_invoices()
+        else:
+            MessageDialog.show_error("Error", "Failed to delete invoice")
+        
+        # Restore focus to main window
+        self.restore_focus()
+    
+    def delete_all_invoices(self):
+        """Delete all invoices (Admin only)"""
+        # Verify admin role
+        if not self.auth_manager.current_user or self.auth_manager.current_user.get('role') != 'Admin':
+            MessageDialog.show_error("Permission Denied", "Only administrators can delete all invoices")
+            return
+        
+        # Confirm deletion with warning
+        confirm = MessageDialog.show_confirm(
+            "⚠️ DANGER: Delete All Invoices",
+            "Are you absolutely sure you want to delete ALL invoices?\n\n" +
+            "This will permanently remove ALL invoice records and cannot be undone!\n\n" +
+            "Click OK to continue to final confirmation."
+        )
+        
+        if not confirm:
+            return
+        
+        # Second confirmation with text input
+        from tkinter import simpledialog
+        confirmation_text = simpledialog.askstring(
+            "Final Confirmation",
+            "Type 'DELETE ALL' to confirm:",
+            parent=self
+        )
+        
+        if confirmation_text != "DELETE ALL":
+            MessageDialog.show_warning("Cancelled", "Deletion cancelled - confirmation text did not match")
+            return
+        
+        if self.db_manager.delete_all_invoices():
+            MessageDialog.show_success("Success", "All invoices deleted successfully")
+            self.load_invoices()
+        else:
+            MessageDialog.show_error("Error", "Failed to delete all invoices")
+        
+        # Restore focus to main window
+        self.restore_focus()

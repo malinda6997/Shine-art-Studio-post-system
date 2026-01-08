@@ -292,14 +292,15 @@ class DatabaseManager:
                                           quantity, unit_price, total_price, buying_price))
     
     def get_invoice_by_id(self, invoice_id: int) -> Optional[Dict[str, Any]]:
-        """Get invoice with customer details (handles both registered and guest customers)"""
+        """Get invoice with customer details (handles both registered and guest customers, and bookings)"""
         query = '''
             SELECT i.*, 
-                   COALESCE(c.full_name, i.guest_name) as full_name, 
-                   c.mobile_number,
+                   COALESCE(c.full_name, i.guest_name, b.customer_name) as full_name, 
+                   COALESCE(c.mobile_number, b.mobile_number) as mobile_number,
                    u.full_name as created_by_name
             FROM invoices i
             LEFT JOIN customers c ON i.customer_id = c.id
+            LEFT JOIN bookings b ON i.booking_id = b.id
             JOIN users u ON i.created_by = u.id
             WHERE i.id = ?
         '''
@@ -307,14 +308,15 @@ class DatabaseManager:
         return results[0] if results else None
     
     def get_invoice_by_number(self, invoice_number: str) -> Optional[Dict[str, Any]]:
-        """Get invoice by invoice number (handles both registered and guest customers)"""
+        """Get invoice by invoice number (handles both registered and guest customers, and bookings)"""
         query = '''
             SELECT i.*, 
-                   COALESCE(c.full_name, i.guest_name) as full_name, 
-                   c.mobile_number,
+                   COALESCE(c.full_name, i.guest_name, b.customer_name) as full_name, 
+                   COALESCE(c.mobile_number, b.mobile_number) as mobile_number,
                    u.full_name as created_by_name
             FROM invoices i
             LEFT JOIN customers c ON i.customer_id = c.id
+            LEFT JOIN bookings b ON i.booking_id = b.id
             JOIN users u ON i.created_by = u.id
             WHERE i.invoice_number = ?
         '''
@@ -327,34 +329,38 @@ class DatabaseManager:
         return self.execute_query(query, (invoice_id,))
     
     def get_all_invoices(self, limit: int = 100) -> List[Dict[str, Any]]:
-        """Get all invoices with customer info (handles both registered and guest customers)"""
+        """Get all invoices with customer info (handles both registered and guest customers, and bookings)"""
         query = '''
             SELECT i.*, 
-                   COALESCE(c.full_name, i.guest_name) as full_name, 
-                   c.mobile_number
+                   COALESCE(c.full_name, i.guest_name, b.customer_name) as full_name, 
+                   COALESCE(c.mobile_number, b.mobile_number) as mobile_number
             FROM invoices i
             LEFT JOIN customers c ON i.customer_id = c.id
+            LEFT JOIN bookings b ON i.booking_id = b.id
             ORDER BY i.created_at DESC
             LIMIT ?
         '''
         return self.execute_query(query, (limit,))
     
     def search_invoices(self, search_term: str) -> List[Dict[str, Any]]:
-        """Search invoices by invoice number or customer name/mobile (handles guest customers)"""
+        """Search invoices by invoice number or customer name/mobile (handles guest customers and bookings)"""
         query = '''
             SELECT i.*, 
-                   COALESCE(c.full_name, i.guest_name) as full_name, 
-                   c.mobile_number
+                   COALESCE(c.full_name, i.guest_name, b.customer_name) as full_name, 
+                   COALESCE(c.mobile_number, b.mobile_number) as mobile_number
             FROM invoices i
             LEFT JOIN customers c ON i.customer_id = c.id
+            LEFT JOIN bookings b ON i.booking_id = b.id
             WHERE i.invoice_number LIKE ? 
                OR c.full_name LIKE ? 
                OR c.mobile_number LIKE ?
                OR i.guest_name LIKE ?
+               OR b.customer_name LIKE ?
+               OR b.mobile_number LIKE ?
             ORDER BY i.created_at DESC
         '''
         search_pattern = f'%{search_term}%'
-        return self.execute_query(query, (search_pattern, search_pattern, search_pattern, search_pattern))
+        return self.execute_query(query, (search_pattern, search_pattern, search_pattern, search_pattern, search_pattern, search_pattern))
     
     def generate_invoice_number(self) -> str:
         """Generate a unique invoice number"""
@@ -362,6 +368,56 @@ class DatabaseManager:
         result = self.execute_query(query)
         max_id = result[0]['max_id'] if result and result[0]['max_id'] else 0
         return f"INV{str(max_id + 1).zfill(6)}"
+    
+    def delete_invoice(self, invoice_id: int) -> bool:
+        """Delete an invoice and its items (CASCADE)"""
+        conn = None
+        try:
+            with self._lock:
+                conn = self.get_connection()
+                cursor = conn.cursor()
+                
+                # Delete invoice items first
+                cursor.execute('DELETE FROM invoice_items WHERE invoice_id = ?', (invoice_id,))
+                
+                # Delete the invoice
+                cursor.execute('DELETE FROM invoices WHERE id = ?', (invoice_id,))
+                
+                conn.commit()
+                return True
+        except sqlite3.Error as e:
+            print(f"Delete invoice error: {e}")
+            if conn:
+                conn.rollback()
+            return False
+        finally:
+            if conn:
+                conn.close()
+    
+    def delete_all_invoices(self) -> bool:
+        """Delete all invoices and their items"""
+        conn = None
+        try:
+            with self._lock:
+                conn = self.get_connection()
+                cursor = conn.cursor()
+                
+                # Delete all invoice items first
+                cursor.execute('DELETE FROM invoice_items')
+                
+                # Delete all invoices
+                cursor.execute('DELETE FROM invoices')
+                
+                conn.commit()
+                return True
+        except sqlite3.Error as e:
+            print(f"Delete all invoices error: {e}")
+            if conn:
+                conn.rollback()
+            return False
+        finally:
+            if conn:
+                conn.close()
     
     # Booking operations
     def create_booking(self, customer_name: str, mobile_number: str, 
@@ -418,9 +474,9 @@ class DatabaseManager:
         return self.execute_query(query)
     
     def get_booking_by_id(self, booking_id: int) -> Optional[Dict[str, Any]]:
-        """Get booking by ID"""
+        """Get booking by ID with mobile number"""
         query = '''
-            SELECT b.*, u.full_name as created_by_name
+            SELECT b.*, u.full_name as created_by_name, b.mobile_number
             FROM bookings b
             JOIN users u ON b.created_by = u.id
             WHERE b.id = ?

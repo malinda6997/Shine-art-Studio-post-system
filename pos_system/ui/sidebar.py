@@ -116,6 +116,7 @@ class Sidebar(ctk.CTkFrame):
             ("frames", "🖼", "Photo Frames", "can_access_frames"),
             ("bookings", "📅", "Bookings", "can_access_bookings"),
             ("invoices", "📄", "Invoices", "can_access_invoices"),
+            ("bills", "🧾", "Bills History", "can_access_invoices"),
         ]
         
         # Admin only items
